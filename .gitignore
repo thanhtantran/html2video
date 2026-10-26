@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+uploads/*
+outputs/*
+build/*
+voices/*.onnx
+voices/*.onnx.json
+!*/.gitkeep
+.env

@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HTML → MP4 Studio</title>
+<style>
+:root{--bg:#0b1020;--card:#141b2e;--line:#26314d;--txt:#e6ecff;--mut:#8a97b8;--acc:#00c2ff;--acc2:#7b5cff;--ok:#2bd67b;--err:#ff5c7a;--warn:#ffc246}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.5 "Segoe UI",Roboto,sans-serif}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 24px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+header h1{margin:0;font-size:20px}
+a{color:var(--acc)}
+main{display:grid;grid-template-columns:340px 1fr;gap:18px;padding:18px 24px;max-width:1500px;margin:auto}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:18px}
+.card h2{margin:0 0 12px;font-size:15px;color:var(--acc)}
+#drop{border:2px dashed var(--line);border-radius:10px;padding:22px;text-align:center;color:var(--mut);cursor:pointer;transition:.2s}
+#drop:hover,#drop.over{border-color:var(--acc);color:var(--txt);background:#00c2ff0d}
+.item{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;margin-top:8px;cursor:pointer}
+.item:hover{border-color:#3a4a70}.item.sel{border-color:var(--acc);background:#1a2540}
+.item button{background:none;border:none;cursor:pointer;font-size:15px;padding:4px}
+.pv{position:relative;overflow:hidden;border-radius:8px;background:#000;border:1px solid var(--line);margin:auto}
+.pv iframe{position:absolute;left:0;top:0;border:0;transform-origin:0 0}
+.opts{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px}
+.t{display:block;color:var(--mut);font-size:12px;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg input{display:none}
+.seg label{padding:6px 12px;border:1px solid var(--line);border-radius:8px;cursor:pointer;user-select:none}
+.seg input:checked+label{border-color:var(--acc);background:#00c2ff22;color:#fff}
+.seg input:disabled+label{opacity:.35;cursor:not-allowed;text-decoration:line-through}
+.chk{display:flex;gap:6px;align-items:center;margin-top:6px;cursor:pointer}
+select,textarea{width:100%;background:#0e1426;color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:7px;font:inherit}
+textarea{font-family:Consolas,monospace;font-size:12px}
+input[type=range]{width:100%}
+button.main{background:linear-gradient(90deg,var(--acc),var(--acc2));border:none;color:#fff;font-weight:700;font-size:15px;padding:10px 22px;border-radius:10px;cursor:pointer}
+button.main:disabled{opacity:.5;cursor:not-allowed}
+button.sec{background:#1f2a45;border:1px solid var(--line);color:var(--txt);padding:5px 12px;border-radius:8px;cursor:pointer;margin-top:8px}
+.bar{height:8px;background:#0e1426;border-radius:6px;overflow:hidden;margin:6px 0}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--acc),var(--acc2));transition:width .4s}
+table{width:100%;border-collapse:collapse;font-size:13px}
+td,th{padding:6px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{color:var(--mut);font-weight:600}
+.scroll{max-height:260px;overflow:auto}
+.job{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:10px}
+.st{font-size:12px;padding:2px 8px;border-radius:20px;background:#26314d}
+.st.running{background:#00c2ff33;color:var(--acc)}.st.done{background:#2bd67b33;color:var(--ok)}
+.st.error{background:#ff5c7a33;color:var(--err)}.st.cancelled{color:var(--mut)}
+pre.err{white-space:pre-wrap;color:var(--err);font-size:12px;margin:6px 0 0}
+.out{padding:8px 0;border-bottom:1px solid var(--line);word-break:break-all}
+.out a{text-decoration:none;margin-right:8px}
+.hidden{display:none!important}
+.muted{color:var(--mut)}
+.warn{color:var(--warn)}
+@media(max-width:950px){main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <h1>🎬 HTML → MP4 Studio</h1>
+  <div><span id="sys" class="muted">Đang kiểm tra hệ thống…</span>
+    <a href="#" id="recheck" style="margin-left:8px">↻ Kiểm tra lại</a></div>
+</header>
+
+<main>
+<aside>
+  <div class="card">
+    <h2>📁 Dự án</h2>
+    <div id="drop">Kéo thả file <b>.html</b> hoặc <b>.zip</b> vào đây<br><small>(hoặc bấm để chọn file)</small></div>
+    <input type="file" id="file" accept=".html,.htm,.zip" hidden>
+    <div id="upmsg" class="muted" style="margin-top:8px"></div>
+    <div id="plist"></div>
+  </div>
+  <div class="card">
+    <h2>🎞️ Video đã xuất</h2>
+    <video id="player" controls class="hidden" style="width:100%;border-radius:8px;margin-bottom:8px;background:#000"></video>
+    <div id="outs" class="muted">Chưa có video.</div>
+  </div>
+</aside>
+
+<section>
+  <div id="empty" class="card muted">👈 Hãy tải lên hoặc chọn một dự án ở cột bên trái.</div>
+
+  <div id="proj" class="hidden">
+    <div class="card">
+      <h2 id="ptitle"></h2>
+      <div class="pv" id="pv"><iframe id="frame"></iframe></div>
+      <div id="pinfo" class="muted" style="margin:10px 0"></div>
+      <div class="scroll"><table id="scenes"></table></div>
+    </div>
+
+    <div class="card">
+      <h2>⚙️ Tùy chọn render</h2>
+      <div class="opts">
+        <div>
+          <span class="t">Giọng đọc (TTS)</span>
+          <div class="seg">
+            <input type="radio" name="tts" id="tts-edge" value="edge" checked><label for="tts-edge">☁️ Edge TTS</label>
+            <input type="radio" name="tts" id="tts-piper" value="piper"><label for="tts-piper">💻 Piper (offline)</label>
+          </div>
+        </div>
+        <div id="box-edge">
+          <span class="t">Giọng Edge</span>
+          <select id="voice"><option>vi-VN-HoaiMyNeural</option></select>
+          <label class="chk"><input type="checkbox" id="vionly" checked> Chỉ hiện giọng tiếng Việt</label>
+        </div>
+        <div id="box-piper" class="hidden">
+          <span class="t">Model Piper (thư mục voices/)</span>
+          <select id="pmodel"></select>
+        </div>
+        <div>
+          <span class="t">Tốc độ đọc: <b id="ratev">+5%</b></span>
+          <input type="range" id="rate" min="-30" max="50" step="5" value="5">
+        </div>
+        <div>
+          <span class="t">Khung hình</span>
+          <div class="seg">
+            <input type="radio" name="aspect" id="a1" value="16:9" checked><label for="a1">▭ 16:9</label>
+            <input type="radio" name="aspect" id="a2" value="9:16"><label for="a2">▯ 9:16</label>
+            <input type="radio" name="aspect" id="a3" value="4:3"><label for="a3">◻ 4:3</label>
+          </div>
+        </div>
+        <div>
+          <span class="t">Độ phân giải <span id="resinfo"></span></span>
+          <select id="res">
+            <option value="720p">720p</option><option value="1080p" selected>1080p</option>
+            <option value="1440p">1440p</option><option value="2160p">4K (2160p)</option>
+          </select>
+        </div>
+        <div>
+          <span class="t">FPS</span>
+          <select id="fps"><option>24</option><option>25</option><option selected>30</option><option>60</option></select>
+        </div>
+        <div>
+          <span class="t">Số luồng render song song</span>
+          <select id="workers">
+            <option value="0" selected>Tự động</option>
+            <option>1</option><option>2</option><option>3</option><option>4</option>
+            <option>5</option><option>6</option><option>8</option>
+          </select>
+          <small class="muted" id="cpuinfo"></small>
+        </div>
+        <div>
+          <span class="t">Tăng tốc</span>
+          <label class="chk"><input type="checkbox" id="upscale"> Chụp 2/3 độ phân giải rồi phóng to</label>
+          <label class="chk"><input type="checkbox" id="cgpu"> Chromium dùng GPU (thử nghiệm)</label>
+        </div>
+        <div>
+          <span class="t">Phụ đề</span>
+          <label class="chk"><input type="checkbox" id="subs" checked> In phụ đề lên video</label>
+          <small class="muted">File .srt luôn được xuất kèm</small>
+        </div>
+        <div>
+          <span class="t">Bộ mã hóa video</span>
+          <div class="seg">
+            <input type="radio" name="encoder" id="enc-cpu" value="cpu" checked><label for="enc-cpu">🖥️ CPU</label>
+            <input type="radio" name="encoder" id="enc-nvidia" value="nvidia"><label for="enc-nvidia">🟩 NVIDIA</label>
+            <input type="radio" name="encoder" id="enc-rockchip" value="rockchip"><label for="enc-rockchip">🟧 Rockchip</label>
+          </div>
+        </div>
+        <div>
+          <span class="t">Codec</span>
+          <div class="seg">
+            <input type="radio" name="codec" id="c-h264" value="h264" checked><label for="c-h264">H.264</label>
+            <input type="radio" name="codec" id="c-hevc" value="hevc"><label for="c-hevc">H.265 / HEVC</label>
+          </div>
+        </div>
+      </div>
+
+      <details style="margin-top:16px">
+        <summary style="cursor:pointer">🎨 CSS bổ sung (chèn vào trang khi render; xem trước cập nhật ngay)</summary>
+        <textarea id="css" rows="9" style="margin-top:8px" placeholder="Ví dụ: h1{color:red}"></textarea>
+        <button class="sec" id="cssPortrait">Chèn mẫu CSS khung dọc (rockchip.html)</button>
+        <button class="sec" id="cssPerf">Chèn CSS tối ưu tốc độ (rockchip.html)</button>
+        <button class="sec" id="cssClear">Xóa</button>
+      </details>
+
+      <div style="margin-top:18px;display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+        <button class="main" id="go">🚀 Render MP4</button>
+        <span id="gomsg" class="muted"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>⏳ Hàng đợi render</h2>
+    <div id="jobs" class="muted">Chưa có tác vụ.</div>
+  </div>
+</section>
+</main>
+
+<script>
+const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+const val = n => (document.querySelector(`input[name=${n}]:checked`) || {}).value;
+const ASPECT = {"16:9": [1280, 720], "9:16": [720, 1280], "4:3": [960, 720]};
+const SCALE = {"720p": 1, "1080p": 1.5, "1440p": 2, "2160p": 3};
+const ST = {queued: "Đang chờ", running: "Đang render", done: "Hoàn tất", error: "Lỗi", cancelled: "Đã hủy"};
+let caps = null, cur = null, voices = [], lastDone = -1;
+
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmtT = s => { s = Math.round(s); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
+const fmtB = b => b > 1e6 ? (b / 1e6).toFixed(1) + " MB" : (b / 1e3).toFixed(0) + " KB";
+async function api(url, opt) {
+  const r = await fetch(url, opt);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+}
+
+/* ---------- Năng lực hệ thống ---------- */
+function setDis(id, d) {
+  const el = document.getElementById(id);
+  el.disabled = d;
+  if (d && el.checked) {
+    el.checked = false;
+    const alt = $$(`input[name=${el.name}]`).find(x => !x.disabled);
+    if (alt) alt.checked = true;
+  }
+}
+async function loadCaps(refresh) {
+  $("#sys").textContent = "Đang kiểm tra bộ mã hóa…";
+  caps = await api("/api/capabilities" + (refresh ? "?refresh=1" : ""));
+  const e = caps.encoders, ok = k => e[k].h264 || e[k].hevc, ic = b => b ? "✅" : "❌";
+  setDis("enc-cpu", !ok("cpu")); setDis("enc-nvidia", !ok("nvidia")); setDis("enc-rockchip", !ok("rockchip"));
+  setDis("tts-piper", !caps.piper || !caps.piper_models.length);
+  $("#pmodel").innerHTML = caps.piper_models.map(m => `<option>${esc(m)}</option>`).join("");
+  $("#sys").innerHTML = `FFmpeg ${ic(caps.ffmpeg)} · CPU ${ic(ok("cpu"))} · NVIDIA ${ic(ok("nvidia"))}` +
+    ` · Rockchip ${ic(ok("rockchip"))} · Piper ${ic(caps.piper && caps.piper_models.length)}`;
+  $("#cpuinfo").textContent = `Máy có ${caps.cpus} lõi · Tự động = ${caps.auto_workers} luồng`;
+  updateCodec(); updTts();
+}
+function updateCodec() {
+  if (!caps) return;
+  const e = caps.encoders[val("encoder")] || {};
+  setDis("c-h264", !e.h264); setDis("c-hevc", !e.hevc);
+  if (!val("codec")) { const f = $$("input[name=codec]").find(x => !x.disabled); if (f) f.checked = true; }
+}
+function updTts() {
+  const p = val("tts") === "piper";
+  $("#box-edge").classList.toggle("hidden", p);
+  $("#box-piper").classList.toggle("hidden", !p);
+}
+function updRes() {
+  const [w, h] = ASPECT[val("aspect")], s = SCALE[$("#res").value];
+  $("#resinfo").textContent = `→ ${w * s}×${h * s}`;
+}
+
+/* ---------- Giọng Edge ---------- */
+async function loadVoices() { voices = await api("/api/voices"); fillVoices(); }
+function fillVoices() {
+  const vi = $("#vionly").checked, keep = $("#voice").value;
+  const list = voices.filter(v => !vi || v.locale.startsWith("vi"));
+  $("#voice").innerHTML = list.map(v =>
+    `<option value="${esc(v.id)}" ${v.id === keep ? "selected" : ""}>${esc(v.id)} (${v.gender === "Female" ? "Nữ" : "Nam"})</option>`).join("");
+}
+
+/* ---------- Dự án ---------- */
+async function loadProjects() {
+  const ps = await api("/api/projects");
+  $("#plist").innerHTML = ps.length ? ps.map(p => `
+    <div class="item ${cur && cur.id === p.id ? "sel" : ""}" data-id="${esc(p.id)}">
+      <div><b>${esc(p.name)}</b><br><small class="muted">${esc(p.entry)} · ${esc(p.uploaded)}</small></div>
+      <button data-del="${esc(p.id)}" title="Xóa dự án">🗑</button>
+    </div>`).join("") : '<div class="muted" style="margin-top:8px">Chưa có dự án.</div>';
+}
+$("#plist").onclick = async e => {
+  const del = e.target.closest("[data-del]");
+  if (del) {
+    e.stopPropagation();
+    if (!confirm("Xóa dự án này?")) return;
+    await api(`/api/projects/${del.dataset.del}`, {method: "DELETE"});
+    if (cur && cur.id === del.dataset.del) { cur = null; $("#proj").classList.add("hidden"); $("#empty").classList.remove("hidden"); }
+    return loadProjects();
+  }
+  const it = e.target.closest(".item");
+  if (it) selectProject(it.dataset.id);
+};
+async function selectProject(id) {
+  const a = await api(`/api/projects/${id}`);
+  cur = a;
+  $("#empty").classList.add("hidden"); $("#proj").classList.remove("hidden");
+  $("#ptitle").textContent = "📄 " + (a.title || a.name);
+  $("#frame").src = `/preview/${a.id}/` + a.entry.split("/").map(encodeURIComponent).join("/");
+  $("#pinfo").innerHTML = a.scenes.length
+    ? `<b>${a.scenes.length}</b> cảnh · <b>${a.chars}</b> ký tự lời thoại · thời lượng ước tính <b>~${fmtT(a.est)}</b>`
+    : `<span class="warn">⚠ Không tìm thấy &lt;section class="scene" data-say="…"&gt; nào. File cần theo cấu trúc này để render.</span>`;
+  $("#scenes").innerHTML = "<tr><th>#</th><th>Tối thiểu</th><th>Lời thoại</th></tr>" + a.scenes.map((s, i) =>
+    `<tr><td>${i + 1}</td><td>${s.t}s</td><td>${s.say ? esc(s.say) : '<i class="muted">(không có lời)</i>'}</td></tr>`).join("");
+  $("#go").disabled = !a.scenes.length;
+  fitPreview(); loadProjects();
+}
+
+/* ---------- Xem trước ---------- */
+function fitPreview() {
+  if (!cur) return;
+  const [w, h] = ASPECT[val("aspect")], pv = $("#pv");
+  const s = Math.min(pv.parentElement.clientWidth / w, window.innerHeight * 0.55 / h);
+  pv.style.width = w * s + "px"; pv.style.height = h * s + "px";
+  const f = $("#frame");
+  f.style.width = w + "px"; f.style.height = h + "px"; f.style.transform = `scale(${s})`;
+}
+function injectCss() {
+  try {
+    const d = $("#frame").contentDocument;
+    if (!d || !d.head) return;
+    let st = d.getElementById("__extra");
+    if (!st) { st = d.createElement("style"); st.id = "__extra"; d.head.appendChild(st); }
+    st.textContent = $("#css").value;
+  } catch (e) {}
+}
+$("#frame").onload = injectCss;
+$("#css").oninput = injectCss;
+
+/* ---------- Upload ---------- */
+const drop = $("#drop"), fi = $("#file");
+drop.onclick = () => fi.click();
+fi.onchange = () => { if (fi.files[0]) upload(fi.files[0]); fi.value = ""; };
+drop.ondragover = e => { e.preventDefault(); drop.classList.add("over"); };
+drop.ondragleave = () => drop.classList.remove("over");
+drop.ondrop = e => { e.preventDefault(); drop.classList.remove("over"); if (e.dataTransfer.files[0]) upload(e.dataTransfer.files[0]); };
+async function upload(file) {
+  const fd = new FormData(); fd.append("file", file);
+  $("#upmsg").textContent = "Đang tải lên…";
+  try {
+    const p = await api("/api/upload", {method: "POST", body: fd});
+    $("#upmsg").textContent = "✅ Đã tải lên: " + p.name;
+    await loadProjects(); selectProject(p.id);
+  } catch (e) { $("#upmsg").textContent = "❌ " + e.message; }
+}
+
+/* ---------- Render ---------- */
+$("#go").onclick = async () => {
+  if (!cur) return;
+  const o = {
+    project: cur.id, tts: val("tts"), voice: $("#voice").value, piper_model: $("#pmodel").value,
+    rate: +$("#rate").value, aspect: val("aspect"), resolution: $("#res").value, fps: +$("#fps").value,
+    subtitles: $("#subs").checked, encoder: val("encoder"), codec: val("codec"), extra_css: $("#css").value,
+    workers: +$("#workers").value, upscale: $("#upscale").checked, chromium_gpu: $("#cgpu").checked,
+  };
+  try {
+    const j = await api("/api/render", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(o)});
+    $("#gomsg").textContent = "✅ Đã thêm vào hàng đợi: " + j.output;
+    pollJobs();
+  } catch (e) { $("#gomsg").textContent = "❌ " + e.message; }
+};
+async function cancelJob(id) { await api(`/api/jobs/${id}/cancel`, {method: "POST"}); pollJobs(); }
+
+async function pollJobs() {
+  let js;
+  try { js = await api("/api/jobs"); } catch { return; }
+  if (js.length) $("#jobs").innerHTML = js.map(j => `
+    <div class="job">
+      <div style="display:flex;justify-content:space-between;gap:8px"><b style="word-break:break-all">${esc(j.output)}</b>
+        <span class="st ${j.status}">${ST[j.status]}</span></div>
+      <small class="muted">${esc(j.summary)}</small>
+      <div class="bar"><i style="width:${j.progress}%"></i></div>
+      ${j.status === "error" ? `<pre class="err">${esc(j.message)}</pre>` : `<small>${j.progress.toFixed(0)}% · ${esc(j.message)}</small>`}
+      <div>
+        ${["queued", "running"].includes(j.status) ? `<button class="sec" onclick="cancelJob('${j.id}')">✖ Hủy</button>` : ""}
+        ${j.status === "done" ? `<a href="/outputs/${encodeURIComponent(j.output)}?dl=1">⬇ Tải MP4</a>
+           <a href="#" onclick="play('${encodeURIComponent(j.output)}');return false">▶ Xem</a>` : ""}
+      </div>
+    </div>`).join("");
+  const done = js.filter(j => j.status === "done").length;
+  if (done !== lastDone) { lastDone = done; loadOutputs(); }
+}
+
+/* ---------- Video đã xuất ---------- */
+async function loadOutputs() {
+  const os = await api("/api/outputs");
+  $("#outs").innerHTML = os.length ? os.map(o => {
+    const n = encodeURIComponent(o.name);
+    return `<div class="out"><a href="#" onclick="play('${n}');return false">▶ ${esc(o.name)}</a><br>
+      <small class="muted">${fmtB(o.size)} · ${o.time}</small>
+      <a href="/outputs/${n}?dl=1" title="Tải MP4">⬇ MP4</a>
+      ${o.srt ? `<a href="/outputs/${encodeURIComponent(o.srt)}?dl=1">⬇ SRT</a>` : ""}
+      <a href="#" onclick="delOut('${n}');return false" title="Xóa">🗑</a></div>`;
+  }).join("") : '<div class="muted">Chưa có video.</div>';
+}
+function play(n) { const p = $("#player"); p.src = "/outputs/" + n; p.classList.remove("hidden"); p.play(); }
+async function delOut(n) {
+  if (!confirm("Xóa video này?")) return;
+  await api("/api/outputs/" + n, {method: "DELETE"});
+  loadOutputs();
+}
+
+/* ---------- Mẫu CSS (dành cho rockchip.html) ---------- */
+const PORTRAIT_CSS = `@media (orientation: portrait) {
+  h1{font-size:9vw} h2{font-size:6.5vw;margin-bottom:2vh} h3{font-size:4.6vw}
+  p,li{font-size:3.7vw} .sub{font-size:4.2vw;text-align:center}
+  .row{flex-direction:column;gap:1.4vh}
+  .card{min-width:86vw;max-width:90vw;padding:1.4vh 4vw}
+  .blocks{grid-template-columns:repeat(2,42vw);gap:3vw} .blk{font-size:4.5vw} .blk span{font-size:3vw}
+  .tl{flex-direction:column;width:86vw;gap:1.6vh} .tl::before{display:none}
+  .ev{width:86vw;display:flex;align-items:center;gap:4vw;text-align:left}
+  .ev .dot{margin:0;flex:none} .ev b{font-size:4.6vw} .ev p{font-size:3.4vw}
+  .bars{width:90vw} .bar label{width:24vw;font-size:3.8vw} .bar .fill{font-size:3.4vw}
+  .tag{font-size:3.3vw} .core{font-size:2.6vw}
+  #caption{font-size:3.8vw;width:92vw;bottom:5vh}
+}`;
+const PERF_CSS = `/* Tối ưu tốc độ render cho rockchip.html: hình ảnh gần như không đổi */
+#stage{background:radial-gradient(circle at 30% 20%,#0b2a4a 0,#05070f 60%)}
+#bg{inset:-400px 0 0 -400px;background:
+  linear-gradient(rgba(0,180,255,.06) 1px,transparent 1px) 0 0/40px 40px,
+  linear-gradient(90deg,rgba(0,180,255,.06) 1px,transparent 1px) 0 0/40px 40px;
+  animation:gridT 20s linear infinite;will-change:transform}
+@keyframes gridT{to{transform:translate(400px,400px)}}
+.card{backdrop-filter:none;background:rgba(20,35,60,.9)}`;
+$("#cssPortrait").onclick = () => { $("#css").value = ($("#css").value.trim() + "\n\n" + PORTRAIT_CSS).trim(); injectCss(); };
+$("#cssPerf").onclick = () => { $("#css").value = ($("#css").value.trim() + "\n\n" + PERF_CSS).trim(); injectCss(); };
+$("#cssClear").onclick = () => { $("#css").value = ""; injectCss(); };
+
+/* ---------- Sự kiện chung ---------- */
+document.addEventListener("change", e => {
+  const n = e.target.name, id = e.target.id;
+  if (n === "aspect") { fitPreview(); updRes(); }
+  if (n === "encoder") updateCodec();
+  if (n === "tts") updTts();
+  if (id === "res") updRes();
+  if (id === "vionly") fillVoices();
+});
+$("#rate").oninput = () => { const v = +$("#rate").value; $("#ratev").textContent = (v >= 0 ? "+" : "") + v + "%"; };
+$("#recheck").onclick = e => { e.preventDefault(); loadCaps(true).catch(err => $("#sys").textContent = "❌ " + err.message); };
+window.addEventListener("resize", fitPreview);
+
+(async () => {
+  updRes(); updTts();
+  loadProjects(); loadOutputs();
+  loadVoices().catch(() => {});
+  loadCaps().catch(e => $("#sys").textContent = "❌ " + e.message);
+  pollJobs(); setInterval(pollJobs, 1500);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>Demo HTML → MP4 Studio</title>
+<style>
+body{margin:0;background:#0b1020;color:#fff;font-family:"Noto Sans",sans-serif;overflow:hidden;height:100vh}
+.scene{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4vmin;opacity:0}
+.scene.active{opacity:1}
+.a{opacity:0}
+.scene.active .a{animation:up .8s ease-out forwards;animation-delay:var(--d,0s)}
+@keyframes up{from{opacity:0;transform:translateY(40px)}to{opacity:1;transform:none}}
+h1{font-size:8vmin;margin:0;background:linear-gradient(90deg,#00c2ff,#7b5cff);-webkit-background-clip:text;color:transparent}
+p{font-size:4.5vmin;color:#9fb6d9;margin:0;text-align:center}
+.box{width:22vmin;height:22vmin;border-radius:3vmin;background:linear-gradient(135deg,#00c2ff,#7b5cff)}
+.scene.active .spin{animation:spin 3s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#progress{position:fixed;left:0;bottom:0;height:6px;width:0;background:#00c2ff}
+</style>
+</head>
+<body>
+<section class="scene active" data-t="4" data-say="Xin chào! Đây là video thử nghiệm của HTML sang MP4 Studio.">
+  <h1 class="a">HTML → MP4 Studio</h1>
+  <p class="a" style="--d:.5s">Video thử nghiệm</p>
+</section>
+<section class="scene" data-t="5" data-say="Mỗi cảnh là một thẻ section có class scene. Lời thoại nằm trong thuộc tính data say.">
+  <div class="box spin"></div>
+  <p class="a" style="--d:.3s">Mỗi cảnh = &lt;section class="scene" data-say="…"&gt;</p>
+</section>
+<section class="scene" data-t="4" data-say="Chúc bạn render vui vẻ trên Orange Pi 5 Plus!">
+  <h1 class="a">Hoàn tất 🎉</h1>
+</section>
+<div id="progress"></div>
+<script>
+// Khi xem bình thường thì tự chuyển cảnh. Khi bị Playwright điều khiển (lúc render) thì không làm gì.
+if (!navigator.webdriver) {
+  const sc = [...document.querySelectorAll('.scene')]; let i = 0;
+  const next = () => { sc.forEach(s => s.classList.remove('active')); sc[i].classList.add('active');
+    setTimeout(() => { i = (i + 1) % sc.length; next(); }, (+sc[i].dataset.t || 5) * 1000); };
+  next();
+}
+</script>
+</body>
+</html>
