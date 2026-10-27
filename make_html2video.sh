@@ -59,7 +59,7 @@ __EOF__
 # =====================================================================
 cat > install.sh <<'__EOF__'
 #!/usr/bin/env bash
-# Cài đặt HTML → MP4 Studio trên Ubuntu / Debian / Armbian (x86_64 hoặc ARM64)
+# Cài đặt HTML2Video trên Ubuntu / Debian / Armbian (x86_64 hoặc ARM64)
 #   ./install.sh            cài gói hệ thống + venv + Chromium
 #   ./install.sh --service  cài thêm systemd service (tự chạy khi khởi động)
 set -euo pipefail
@@ -101,7 +101,7 @@ if [ "${1:-}" = "--service" ]; then
   echo "==> [5/5] Cài systemd service html2video"
   sudo tee /etc/systemd/system/html2video.service >/dev/null <<EOF
 [Unit]
-Description=HTML to MP4 Studio
+Description=HTML2Video
 After=network-online.target
 Wants=network-online.target
 
@@ -215,7 +215,7 @@ cat > examples/demo.html <<'__EOF__'
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
-<title>Demo HTML → MP4 Studio</title>
+<title>Demo HTML2Video</title>
 <style>
 body{margin:0;background:#0b1020;color:#fff;font-family:"Noto Sans",sans-serif;overflow:hidden;height:100vh}
 .scene{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4vmin;opacity:0}
@@ -232,8 +232,8 @@ p{font-size:4.5vmin;color:#9fb6d9;margin:0;text-align:center}
 </style>
 </head>
 <body>
-<section class="scene active" data-t="4" data-say="Xin chào! Đây là video thử nghiệm của HTML sang MP4 Studio.">
-  <h1 class="a">HTML → MP4 Studio</h1>
+<section class="scene active" data-t="4" data-say="Xin chào! Đây là video thử nghiệm của HTML2Video.">
+  <h1 class="a">HTML2Video</h1>
   <p class="a" style="--d:.5s">Video thử nghiệm</p>
 </section>
 <section class="scene" data-t="5" data-say="Mỗi cảnh là một thẻ section có class scene. Lời thoại nằm trong thuộc tính data say.">
@@ -813,7 +813,7 @@ __EOF__
 # =====================================================================
 cat > app.py <<'__EOF__'
 """
-app.py – Giao diện web Flask cho HTML → MP4 Studio
+app.py – Giao diện web Flask cho HTML2Video
 Chạy: python app.py → mở http://<IP>:5000
 """
 import json
@@ -1122,7 +1122,7 @@ if __name__ == "__main__":
     threading.Thread(target=worker, daemon=True).start()
     threading.Thread(target=get_caps, daemon=True).start()
     host, port = os.environ.get("HOST", "0.0.0.0"), int(os.environ.get("PORT", 5000))
-    print(f"🎬 HTML → MP4 Studio: http://{host}:{port}")
+    print(f"🎬 HTML2Video (chạy trên Orange Pi Rockchip 3588): http://{host}:{port}")
     app.run(host=host, port=port, threaded=True, debug=False)
 __EOF__
 
@@ -1227,13 +1227,16 @@ cat > static/index.html <<'__EOF__'
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>HTML → MP4 Studio</title>
+<title>HTML2Video – chạy trên Orange Pi Rockchip 3588</title>
 <style>
 :root{--bg:#0b1020;--card:#141b2e;--line:#26314d;--txt:#e6ecff;--mut:#8a97b8;--acc:#00c2ff;--acc2:#7b5cff;--ok:#2bd67b;--err:#ff5c7a;--warn:#ffc246}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.5 "Segoe UI",Roboto,sans-serif}
 header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 24px;border-bottom:1px solid var(--line);flex-wrap:wrap}
 header h1{margin:0;font-size:20px}
+header .tagline{margin:2px 0 0;font-size:13px;color:var(--mut)}
+footer{text-align:center;padding:16px 24px;border-top:1px solid var(--line);color:var(--mut);font-size:13px}
+footer a{text-decoration:none}
 a{color:var(--acc)}
 main{display:grid;grid-template-columns:340px 1fr;gap:18px;padding:18px 24px;max-width:1500px;margin:auto}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:18px}
@@ -1280,7 +1283,10 @@ pre.err{white-space:pre-wrap;color:var(--err);font-size:12px;margin:6px 0 0}
 </head>
 <body>
 <header>
-  <h1>🎬 HTML → MP4 Studio</h1>
+  <div>
+    <h1>🎬 HTML2Video</h1>
+    <p class="tagline">chạy trên Orange Pi Rockchip 3588</p>
+  </div>
   <div><span id="sys" class="muted">Đang kiểm tra hệ thống…</span>
     <a href="#" id="recheck" style="margin-left:8px">↻ Kiểm tra lại</a></div>
 </header>
@@ -1411,6 +1417,10 @@ pre.err{white-space:pre-wrap;color:var(--err);font-size:12px;margin:6px 0 0}
   </div>
 </section>
 </main>
+
+<footer>
+  2026 - Copyright by <a href="https://orangepi.vn" target="_blank" rel="noopener">Orange Pi Việt Nam</a>
+</footer>
 
 <script>
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
@@ -1660,7 +1670,9 @@ __EOF__
 
 # =====================================================================
 cat > README.md <<'__EOF__'
-# 🎬 HTML → MP4 Studio
+# 🎬 HTML2Video
+
+> Chạy trên Orange Pi Rockchip 3588
 
 Công cụ chuyển một **trang HTML hoạt hình chia theo cảnh** kèm **giọng đọc TTS** thành video **MP4**. Công cụ có giao diện web, render song song nhiều tiến trình Chromium, và mã hóa video bằng **CPU / NVIDIA NVENC / Rockchip MPP**. Được tối ưu để chạy trên **Orange Pi 5 Plus (RK3588)**, đồng thời chạy được trên mọi máy chủ Linux x86_64 hoặc ARM64.
 

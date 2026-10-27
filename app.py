@@ -1,5 +1,5 @@
 """
-app.py – Giao diện web Flask cho HTML → MP4 Studio
+app.py – Giao diện web Flask cho HTML2Video
 Chạy: python app.py → mở http://<IP>:5000
 """
 import json
@@ -308,5 +308,5 @@ if __name__ == "__main__":
     threading.Thread(target=worker, daemon=True).start()
     threading.Thread(target=get_caps, daemon=True).start()
     host, port = os.environ.get("HOST", "0.0.0.0"), int(os.environ.get("PORT", 5000))
-    print(f"🎬 HTML → MP4 Studio: http://{host}:{port}")
+    print(f"🎬 HTML2Video (chạy trên Orange Pi Rockchip 3588): http://{host}:{port}")
     app.run(host=host, port=port, threaded=True, debug=False)

@@ -3,13 +3,16 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>HTML → MP4 Studio</title>
+<title>HTML2Video – chạy trên Orange Pi Rockchip 3588</title>
 <style>
 :root{--bg:#0b1020;--card:#141b2e;--line:#26314d;--txt:#e6ecff;--mut:#8a97b8;--acc:#00c2ff;--acc2:#7b5cff;--ok:#2bd67b;--err:#ff5c7a;--warn:#ffc246}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.5 "Segoe UI",Roboto,sans-serif}
 header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 24px;border-bottom:1px solid var(--line);flex-wrap:wrap}
 header h1{margin:0;font-size:20px}
+header .tagline{margin:2px 0 0;font-size:13px;color:var(--mut)}
+footer{text-align:center;padding:16px 24px;border-top:1px solid var(--line);color:var(--mut);font-size:13px}
+footer a{text-decoration:none}
 a{color:var(--acc)}
 main{display:grid;grid-template-columns:340px 1fr;gap:18px;padding:18px 24px;max-width:1500px;margin:auto}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:18px}
@@ -56,7 +59,10 @@ pre.err{white-space:pre-wrap;color:var(--err);font-size:12px;margin:6px 0 0}
 </head>
 <body>
 <header>
-  <h1>🎬 HTML → MP4 Studio</h1>
+  <div>
+    <h1>🎬 HTML2Video</h1>
+    <p class="tagline">chạy trên Orange Pi Rockchip 3588</p>
+  </div>
   <div><span id="sys" class="muted">Đang kiểm tra hệ thống…</span>
     <a href="#" id="recheck" style="margin-left:8px">↻ Kiểm tra lại</a></div>
 </header>
@@ -187,6 +193,10 @@ pre.err{white-space:pre-wrap;color:var(--err);font-size:12px;margin:6px 0 0}
   </div>
 </section>
 </main>
+
+<footer>
+  2026 - Copyright by <a href="https://orangepi.vn" target="_blank" rel="noopener">Orange Pi Việt Nam</a>
+</footer>
 
 <script>
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];

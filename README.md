@@ -1,4 +1,6 @@
-# 🎬 HTML → MP4 Studio
+# 🎬 HTML2Video
+
+> Chạy trên Orange Pi Rockchip 3588
 
 Công cụ chuyển một **trang HTML hoạt hình chia theo cảnh** kèm **giọng đọc TTS** thành video **MP4**. Công cụ có giao diện web, render song song nhiều tiến trình Chromium, và mã hóa video bằng **CPU / NVIDIA NVENC / Rockchip MPP**. Được tối ưu để chạy trên **Orange Pi 5 Plus (RK3588)**, đồng thời chạy được trên mọi máy chủ Linux x86_64 hoặc ARM64.
 

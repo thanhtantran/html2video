@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Cài đặt HTML → MP4 Studio trên Ubuntu / Debian / Armbian (x86_64 hoặc ARM64)
+# Cài đặt HTML2Video trên Ubuntu / Debian / Armbian (x86_64 hoặc ARM64)
 #   ./install.sh            cài gói hệ thống + venv + Chromium
 #   ./install.sh --service  cài thêm systemd service (tự chạy khi khởi động)
 set -euo pipefail
@@ -41,7 +41,7 @@ if [ "${1:-}" = "--service" ]; then
   echo "==> [5/5] Cài systemd service html2video"
   sudo tee /etc/systemd/system/html2video.service >/dev/null <<EOF
 [Unit]
-Description=HTML to MP4 Studio
+Description=HTML2Video
 After=network-online.target
 Wants=network-online.target
 
