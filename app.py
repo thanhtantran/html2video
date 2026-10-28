@@ -273,6 +273,25 @@ def api_cancel(jid):
     return jsonify(ok=True)
 
 
+@app.delete("/api/jobs/<jid>")
+def api_delete_job(jid):
+    """Remove a job from the queue UI and delete its MP4/SRT + build/<id> leftovers."""
+    if not SAFE.match(jid or ""):
+        abort(404)
+    job = JOBS.get(jid)
+    if job is None:
+        abort(404)
+    # Signal a still-running worker (it keeps a reference to this dict).
+    job["cancel"] = True
+    JOBS.pop(jid, None)
+    out = job.get("output") or ""
+    if out and SAFE.match(out) and out.endswith(".mp4"):
+        (OUTPUTS / out).unlink(missing_ok=True)
+        (OUTPUTS / out).with_suffix(".srt").unlink(missing_ok=True)
+    shutil.rmtree(BUILD / jid, ignore_errors=True)
+    return jsonify(ok=True)
+
+
 @app.get("/api/outputs")
 def api_outputs():
     busy = {j["output"] for j in JOBS.values() if j["status"] in ("queued", "running")}

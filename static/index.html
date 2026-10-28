@@ -1,51 +1,70 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="vi" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>HTML2Video – chạy trên Orange Pi Rockchip 3588</title>
 <style>
-:root{--bg:#0b1020;--card:#141b2e;--line:#26314d;--txt:#e6ecff;--mut:#8a97b8;--acc:#00c2ff;--acc2:#7b5cff;--ok:#2bd67b;--err:#ff5c7a;--warn:#ffc246}
+:root, html[data-theme="dark"]{
+  --bg:#0b1020; --card:#141b2e; --line:#26314d; --txt:#e6ecff; --mut:#8a97b8;
+  --acc:#00c2ff; --acc2:#7b5cff; --ok:#2bd67b; --err:#ff5c7a; --warn:#ffc246;
+  --input:#0e1426; --drop-hover:#00c2ff0d; --item-sel:#1a2540; --seg-on:#00c2ff22;
+  --sec-bg:#1f2a45; --bar-bg:#0e1426; --st-bg:#26314d; --header-btn:#1f2a45;
+  --preview-bg:#000; --shadow:none;
+}
+html[data-theme="light"]{
+  --bg:#f4f6fb; --card:#ffffff; --line:#d5dbe8; --txt:#1a2336; --mut:#5b6b88;
+  --acc:#0077b6; --acc2:#5a3fd6; --ok:#1a9f57; --err:#d62839; --warn:#b58100;
+  --input:#f7f9fc; --drop-hover:#0077b610; --item-sel:#e8f4fb; --seg-on:#0077b618;
+  --sec-bg:#eef2f8; --bar-bg:#e8edf5; --st-bg:#e4eaf4; --header-btn:#eef2f8;
+  --preview-bg:#111; --shadow:0 1px 2px #0b102014;
+}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.5 "Segoe UI",Roboto,sans-serif}
 header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 24px;border-bottom:1px solid var(--line);flex-wrap:wrap}
 header h1{margin:0;font-size:20px}
 header .tagline{margin:2px 0 0;font-size:13px;color:var(--mut)}
+header .right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 footer{text-align:center;padding:16px 24px;border-top:1px solid var(--line);color:var(--mut);font-size:13px}
 footer a{text-decoration:none}
 a{color:var(--acc)}
 main{display:grid;grid-template-columns:340px 1fr;gap:18px;padding:18px 24px;max-width:1500px;margin:auto}
-.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:18px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:18px;box-shadow:var(--shadow)}
 .card h2{margin:0 0 12px;font-size:15px;color:var(--acc)}
 #drop{border:2px dashed var(--line);border-radius:10px;padding:22px;text-align:center;color:var(--mut);cursor:pointer;transition:.2s}
-#drop:hover,#drop.over{border-color:var(--acc);color:var(--txt);background:#00c2ff0d}
+#drop:hover,#drop.over{border-color:var(--acc);color:var(--txt);background:var(--drop-hover)}
 .item{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;margin-top:8px;cursor:pointer}
-.item:hover{border-color:#3a4a70}.item.sel{border-color:var(--acc);background:#1a2540}
-.item button{background:none;border:none;cursor:pointer;font-size:15px;padding:4px}
-.pv{position:relative;overflow:hidden;border-radius:8px;background:#000;border:1px solid var(--line);margin:auto}
+.item:hover{border-color:var(--acc)}.item.sel{border-color:var(--acc);background:var(--item-sel)}
+.item .del{background:var(--sec-bg);border:1px solid var(--line);color:var(--err);border-radius:8px;cursor:pointer;font-size:12px;padding:5px 10px;white-space:nowrap}
+.item .del:hover{border-color:var(--err)}
+.pv{position:relative;overflow:hidden;border-radius:8px;background:var(--preview-bg);border:1px solid var(--line);margin:auto}
 .pv iframe{position:absolute;left:0;top:0;border:0;transform-origin:0 0}
 .opts{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px}
 .t{display:block;color:var(--mut);font-size:12px;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px}
 .seg{display:flex;gap:6px;flex-wrap:wrap}
 .seg input{display:none}
 .seg label{padding:6px 12px;border:1px solid var(--line);border-radius:8px;cursor:pointer;user-select:none}
-.seg input:checked+label{border-color:var(--acc);background:#00c2ff22;color:#fff}
+.seg input:checked+label{border-color:var(--acc);background:var(--seg-on);color:var(--txt)}
 .seg input:disabled+label{opacity:.35;cursor:not-allowed;text-decoration:line-through}
 .chk{display:flex;gap:6px;align-items:center;margin-top:6px;cursor:pointer}
-select,textarea{width:100%;background:#0e1426;color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:7px;font:inherit}
+select,textarea{width:100%;background:var(--input);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:7px;font:inherit}
 textarea{font-family:Consolas,monospace;font-size:12px}
 input[type=range]{width:100%}
 button.main{background:linear-gradient(90deg,var(--acc),var(--acc2));border:none;color:#fff;font-weight:700;font-size:15px;padding:10px 22px;border-radius:10px;cursor:pointer}
 button.main:disabled{opacity:.5;cursor:not-allowed}
-button.sec{background:#1f2a45;border:1px solid var(--line);color:var(--txt);padding:5px 12px;border-radius:8px;cursor:pointer;margin-top:8px}
-.bar{height:8px;background:#0e1426;border-radius:6px;overflow:hidden;margin:6px 0}
+button.sec{background:var(--sec-bg);border:1px solid var(--line);color:var(--txt);padding:5px 12px;border-radius:8px;cursor:pointer;margin-top:8px}
+button.danger{background:var(--sec-bg);border:1px solid var(--line);color:var(--err);padding:5px 12px;border-radius:8px;cursor:pointer;margin-top:8px}
+button.danger:hover{border-color:var(--err)}
+button.theme{background:var(--header-btn);border:1px solid var(--line);color:var(--txt);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:13px}
+.bar{height:8px;background:var(--bar-bg);border-radius:6px;overflow:hidden;margin:6px 0}
 .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--acc),var(--acc2));transition:width .4s}
 table{width:100%;border-collapse:collapse;font-size:13px}
 td,th{padding:6px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
 th{color:var(--mut);font-weight:600}
 .scroll{max-height:260px;overflow:auto}
 .job{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:10px}
-.st{font-size:12px;padding:2px 8px;border-radius:20px;background:#26314d}
+.job .actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:4px}
+.st{font-size:12px;padding:2px 8px;border-radius:20px;background:var(--st-bg)}
 .st.running{background:#00c2ff33;color:var(--acc)}.st.done{background:#2bd67b33;color:var(--ok)}
 .st.error{background:#ff5c7a33;color:var(--err)}.st.cancelled{color:var(--mut)}
 pre.err{white-space:pre-wrap;color:var(--err);font-size:12px;margin:6px 0 0}
@@ -63,8 +82,11 @@ pre.err{white-space:pre-wrap;color:var(--err);font-size:12px;margin:6px 0 0}
     <h1>🎬 HTML2Video</h1>
     <p class="tagline">chạy trên Orange Pi Rockchip 3588</p>
   </div>
-  <div><span id="sys" class="muted">Đang kiểm tra hệ thống…</span>
-    <a href="#" id="recheck" style="margin-left:8px">↻ Kiểm tra lại</a></div>
+  <div class="right">
+    <button type="button" class="theme" id="themeBtn" title="Đổi giao diện sáng/tối">🌙 Tối</button>
+    <span id="sys" class="muted">Đang kiểm tra hệ thống…</span>
+    <a href="#" id="recheck">↻ Kiểm tra lại</a>
+  </div>
 </header>
 
 <main>
@@ -216,6 +238,26 @@ async function api(url, opt) {
   return j;
 }
 
+/* ---------- Theme ---------- */
+const THEME_KEY = "html2video-theme";
+function applyTheme(theme) {
+  const t = theme === "light" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", t);
+  localStorage.setItem(THEME_KEY, t);
+  const btn = $("#themeBtn");
+  if (btn) btn.textContent = t === "dark" ? "☀️ Sáng" : "🌙 Tối";
+  if (btn) btn.title = t === "dark" ? "Chuyển sang giao diện sáng" : "Chuyển sang giao diện tối";
+}
+function initTheme() {
+  const saved = localStorage.getItem(THEME_KEY);
+  if (saved === "light" || saved === "dark") applyTheme(saved);
+  else applyTheme(window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+}
+$("#themeBtn").onclick = () => {
+  const curTheme = document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+  applyTheme(curTheme === "dark" ? "light" : "dark");
+};
+
 /* ---------- Năng lực hệ thống ---------- */
 function setDis(id, d) {
   const el = document.getElementById(id);
@@ -269,17 +311,28 @@ async function loadProjects() {
   $("#plist").innerHTML = ps.length ? ps.map(p => `
     <div class="item ${cur && cur.id === p.id ? "sel" : ""}" data-id="${esc(p.id)}">
       <div><b>${esc(p.name)}</b><br><small class="muted">${esc(p.entry)} · ${esc(p.uploaded)}</small></div>
-      <button data-del="${esc(p.id)}" title="Xóa dự án">🗑</button>
+      <button type="button" class="del" data-del="${esc(p.id)}" title="Xóa thư mục uploads/${esc(p.id)}">🗑 Xóa</button>
     </div>`).join("") : '<div class="muted" style="margin-top:8px">Chưa có dự án.</div>';
 }
 $("#plist").onclick = async e => {
   const del = e.target.closest("[data-del]");
   if (del) {
     e.stopPropagation();
-    if (!confirm("Xóa dự án này?")) return;
-    await api(`/api/projects/${del.dataset.del}`, {method: "DELETE"});
-    if (cur && cur.id === del.dataset.del) { cur = null; $("#proj").classList.add("hidden"); $("#empty").classList.remove("hidden"); }
-    return loadProjects();
+    const pid = del.dataset.del;
+    if (!confirm(`Xóa dự án "${pid}"?\nToàn bộ thư mục uploads/${pid} sẽ bị xóa.`)) return;
+    try {
+      await api(`/api/projects/${encodeURIComponent(pid)}`, {method: "DELETE"});
+      if (cur && cur.id === pid) {
+        cur = null;
+        $("#proj").classList.add("hidden");
+        $("#empty").classList.remove("hidden");
+        $("#frame").src = "about:blank";
+      }
+      await loadProjects();
+    } catch (err) {
+      alert("Không xóa được dự án: " + err.message);
+    }
+    return;
   }
   const it = e.target.closest(".item");
   if (it) selectProject(it.dataset.id);
@@ -337,7 +390,7 @@ async function upload(file) {
   } catch (e) { $("#upmsg").textContent = "❌ " + e.message; }
 }
 
-/* ---------- Render ---------- */
+/* ---------- Render / hàng đợi ---------- */
 $("#go").onclick = async () => {
   if (!cur) return;
   const o = {
@@ -353,23 +406,52 @@ $("#go").onclick = async () => {
   } catch (e) { $("#gomsg").textContent = "❌ " + e.message; }
 };
 async function cancelJob(id) { await api(`/api/jobs/${id}/cancel`, {method: "POST"}); pollJobs(); }
+async function deleteJob(id, output) {
+  const label = output || id;
+  if (!confirm(`Xóa tác vụ "${label}" khỏi hàng đợi?\nSẽ xóa MP4/SRT (nếu có) và thư mục build/${id}.`)) return;
+  try {
+    await api(`/api/jobs/${encodeURIComponent(id)}`, {method: "DELETE"});
+    const player = $("#player");
+    if (player.src && output && decodeURIComponent(player.src).includes(output)) {
+      player.pause(); player.removeAttribute("src"); player.load(); player.classList.add("hidden");
+    }
+    await pollJobs();
+    await loadOutputs();
+  } catch (e) {
+    alert("Không xóa được tác vụ: " + e.message);
+  }
+}
+
+$("#jobs").onclick = e => {
+  const cancel = e.target.closest("[data-cancel]");
+  if (cancel) { cancelJob(cancel.dataset.cancel); return; }
+  const del = e.target.closest("[data-job-del]");
+  if (del) { deleteJob(del.dataset.jobDel, del.dataset.output || ""); return; }
+  const playBtn = e.target.closest("[data-play]");
+  if (playBtn) { e.preventDefault(); play(encodeURIComponent(playBtn.dataset.play)); }
+};
 
 async function pollJobs() {
   let js;
   try { js = await api("/api/jobs"); } catch { return; }
-  if (js.length) $("#jobs").innerHTML = js.map(j => `
+  if (!js.length) {
+    $("#jobs").innerHTML = '<div class="muted">Chưa có tác vụ.</div>';
+  } else {
+    $("#jobs").innerHTML = js.map(j => `
     <div class="job">
       <div style="display:flex;justify-content:space-between;gap:8px"><b style="word-break:break-all">${esc(j.output)}</b>
         <span class="st ${j.status}">${ST[j.status]}</span></div>
       <small class="muted">${esc(j.summary)}</small>
       <div class="bar"><i style="width:${j.progress}%"></i></div>
       ${j.status === "error" ? `<pre class="err">${esc(j.message)}</pre>` : `<small>${j.progress.toFixed(0)}% · ${esc(j.message)}</small>`}
-      <div>
-        ${["queued", "running"].includes(j.status) ? `<button class="sec" onclick="cancelJob('${j.id}')">✖ Hủy</button>` : ""}
+      <div class="actions">
+        ${["queued", "running"].includes(j.status) ? `<button type="button" class="sec" data-cancel="${esc(j.id)}">✖ Hủy</button>` : ""}
         ${j.status === "done" ? `<a href="/outputs/${encodeURIComponent(j.output)}?dl=1">⬇ Tải MP4</a>
-           <a href="#" onclick="play('${encodeURIComponent(j.output)}');return false">▶ Xem</a>` : ""}
+           <a href="#" data-play="${esc(j.output)}">▶ Xem</a>` : ""}
+        <button type="button" class="danger" data-job-del="${esc(j.id)}" data-output="${esc(j.output)}">🗑 Xóa</button>
       </div>
     </div>`).join("");
+  }
   const done = js.filter(j => j.status === "done").length;
   if (done !== lastDone) { lastDone = done; loadOutputs(); }
 }
@@ -433,6 +515,7 @@ $("#recheck").onclick = e => { e.preventDefault(); loadCaps(true).catch(err => $
 window.addEventListener("resize", fitPreview);
 
 (async () => {
+  initTheme();
   updRes(); updTts();
   loadProjects(); loadOutputs();
   loadVoices().catch(() => {});

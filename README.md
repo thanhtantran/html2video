@@ -288,7 +288,7 @@ Sửa file `.env` (được tạo từ `.env.example`), rồi chạy `sudo syste
 | `HOST` / `PORT` | `0.0.0.0` / `5000` | Địa chỉ và cổng web |
 | `FFMPEG_BIN` / `FFPROBE_BIN` | `ffmpeg` / `ffprobe` | Đường dẫn FFmpeg (vd: bản ffmpeg-rockchip) |
 | `PIPER_BIN` | `piper` | Fallback native binary (chỉ dùng khi không có `piper-tts` trong venv) |
-| `PIPER_CONCURRENCY` | `1` | Số synth Piper cùng lúc. **Giữ = 1** trên RK3588; >1 từng làm board hard-reboot. Clone thư mục binary **không** giúp — mỗi process vẫn load full ONNX |
+| `PIPER_CONCURRENCY` | `1` | Số synth Piper cùng lúc. **Giữ = 1** trên RK3588; >1 có thể dùng trên thiết bị khác |
 | `PIPER_ORT_THREADS` / `PIPER_OMP_THREADS` | `2` / `2` | Giới hạn thread onnxruntime/OpenMP cho Piper in-process |
 | `CHROMIUM_ARGS` | (trống) | Cờ bổ sung cho mọi tiến trình Chromium |
 | `CHROMIUM_GPU_ARGS` | ANGLE/GLES | Cờ dùng khi bật "Chromium dùng GPU" |
@@ -391,5 +391,5 @@ Lưu ý thêm: file HTML upload được chạy trong Chromium trên máy chủ.
 - Mỗi lúc chỉ render một tác vụ (các tác vụ khác xếp hàng). Mỗi tác vụ dùng N luồng.
 - Chỉ tua được CSS animation và transition.
 - Thời điểm phụ đề được ước lượng theo số ký tự, không phải theo mốc thời gian từng từ.
-- Edge TTS là dịch vụ không chính thức của Microsoft, có thể thay đổi bất kỳ lúc nào. Cân nhắc trước khi dùng cho mục đích thương mại.
+- Edge TTS là dịch vụ không chính thức của Microsoft, có thể thay đổi bất kỳ lúc nào. Cân nhắc trước khi dùng cho mục đích thương mại. Hoặc sử dụng Piper Offline
 - Hàng đợi tác vụ không được lưu lại sau khi khởi động lại service.
