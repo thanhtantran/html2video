@@ -44,9 +44,9 @@ Công cụ chuyển một **trang HTML hoạt hình chia theo cảnh** kèm **gi
  Flask (app.py) ──hàng đợi (1 tác vụ mỗi lúc)──▶ renderer.py
                                                    │
  ① PHÂN TÍCH   Chromium mở trang, đọc mọi <… class="scene" data-say data-t>
- ② TTS         Edge/Piper tạo giọng đọc (4 cảnh song song)
-               thời lượng cảnh = max(data-t, 0.5s + độ dài giọng + 1s), làm tròn theo khung hình
-               ghép thành audio.wav có độ dài khớp chính xác với tổng số khung hình
+ ② TTS         Edge: tối đa 4 cảnh song song. Piper: 1 process, load model 1 lần rồi synth tuần tự
+              thời lượng cảnh = max(data-t, 0.5s + độ dài giọng + 1s), làm tròn theo khung hình
+              ghép thành audio.wav có độ dài khớp chính xác với tổng số khung hình
  ③ RENDER      chia tổng số khung thành ~3×N đoạn; N tiến trình worker, mỗi worker một Chromium:
                  lặp từng khung g:  tua animation tới thời điểm g → chụp JPEG qua CDP
                                     → đẩy vào ffmpeg (encoder đã chọn) → segXXXX.ts
@@ -287,7 +287,9 @@ Sửa file `.env` (được tạo từ `.env.example`), rồi chạy `sudo syste
 |---|---|---|
 | `HOST` / `PORT` | `0.0.0.0` / `5000` | Địa chỉ và cổng web |
 | `FFMPEG_BIN` / `FFPROBE_BIN` | `ffmpeg` / `ffprobe` | Đường dẫn FFmpeg (vd: bản ffmpeg-rockchip) |
-| `PIPER_BIN` | `piper` | Đường dẫn chương trình Piper |
+| `PIPER_BIN` | `piper` | Fallback native binary (chỉ dùng khi không có `piper-tts` trong venv) |
+| `PIPER_CONCURRENCY` | `1` | Số synth Piper cùng lúc. **Giữ = 1** trên RK3588; >1 từng làm board hard-reboot. Clone thư mục binary **không** giúp — mỗi process vẫn load full ONNX |
+| `PIPER_ORT_THREADS` / `PIPER_OMP_THREADS` | `2` / `2` | Giới hạn thread onnxruntime/OpenMP cho Piper in-process |
 | `CHROMIUM_ARGS` | (trống) | Cờ bổ sung cho mọi tiến trình Chromium |
 | `CHROMIUM_GPU_ARGS` | ANGLE/GLES | Cờ dùng khi bật "Chromium dùng GPU" |
 
@@ -345,6 +347,8 @@ curl -X POST http://localhost:5000/api/render -H 'Content-Type: application/json
 |---|---|
 | Rockchip ❌ dù đã build ffmpeg-rockchip | Chưa đặt `FFMPEG_BIN` trong `.env` hoặc chưa restart service; thiếu quyền `/dev/mpp_service` (kiểm tra `groups`, luật udev); kernel không phải BSP |
 | `Edge TTS lỗi` | Mất Internet hoặc bị chặn kết nối. Chuyển sang Piper |
+| Board reboot / crash khi chọn Piper | Đừng chạy nhiều process Piper song song (kể cả clone `piper-tts-cpu2`). Mỗi process load ~60 MB ONNX + ORT. Code hiện load model **1 lần trong process** rồi synth tuần tự. Restart service sau cập nhật. **Không** tăng `PIPER_CONCURRENCY` trên RK3588 |
+| `Piper lỗi (… size=0)` / WAV rỗng | Lần chạy trước bị cắt giữa chừng (reboot), để lại `build/*/raw*.wav` rỗng. Xóa job đó và chạy lại; ưu tiên `piper-tts` trong `.venv` (warm). `PIPER_BIN` chỉ là fallback |
 | Chữ tiếng Việt hoặc emoji hiển thị thành ô vuông | Thiếu font: `sudo apt install fonts-noto-core fonts-noto-color-emoji fonts-noto-cjk` |
 | `Executable doesn't exist` / Chromium không chạy | Chạy lại `.venv/bin/python -m playwright install chromium` **bằng đúng user chạy service** |
 | Lỗi thiếu thư viện `.so` của Chromium | `sudo .venv/bin/python -m playwright install-deps chromium` |

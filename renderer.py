@@ -15,7 +15,9 @@ import os
 import re
 import shutil
 import subprocess
+import threading
 import time
+import wave
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
@@ -26,6 +28,18 @@ from playwright.async_api import async_playwright
 FFMPEG = os.environ.get("FFMPEG_BIN", "ffmpeg")
 FFPROBE = os.environ.get("FFPROBE_BIN", "ffprobe")
 PIPER = os.environ.get("PIPER_BIN", "piper")
+# Native Piper (onnxruntime) loads the full voice into RAM. Running several
+# copies at once has hard-rebooted RK3588 boards; keep TTS serial by default.
+# Faster path: keep one in-process PiperVoice warm (load once, synth many).
+try:
+    PIPER_CONCURRENCY = max(1, int(os.environ.get("PIPER_CONCURRENCY", "1")))
+except ValueError:
+    PIPER_CONCURRENCY = 1
+# Cap ORT/OpenMP threads before onnxruntime starts — reduces thrash on RK3588.
+os.environ.setdefault("OMP_NUM_THREADS", os.environ.get("PIPER_OMP_THREADS", "2"))
+os.environ.setdefault("MKL_NUM_THREADS", os.environ.get("PIPER_OMP_THREADS", "2"))
+os.environ.setdefault("ORT_INTRA_OP_NUM_THREADS", os.environ.get("PIPER_ORT_THREADS", "2"))
+os.environ.setdefault("ORT_INTER_OP_NUM_THREADS", "1")
 
 ASPECTS = {"16:9": (1280, 720), "9:16": (720, 1280), "4:3": (960, 720)}
 SCALES = {"720p": 1.0, "1080p": 1.5, "1440p": 2.0, "2160p": 3.0}
@@ -108,12 +122,25 @@ def list_piper_models(voices_dir: Path):
                   if p.with_suffix(".onnx.json").exists())
 
 
+def _piper_python_ok() -> bool:
+    try:
+        import piper  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
+def _piper_available() -> bool:
+    # Prefer in-process piper-tts (warm model). Native PIPER_BIN is fallback only.
+    return _piper_python_ok() or shutil.which(PIPER) is not None
+
+
 def detect_capabilities(voices_dir: Path) -> dict:
     ffmpeg_ok = shutil.which(FFMPEG) is not None and shutil.which(FFPROBE) is not None
     enc = {e: {c: bool(ffmpeg_ok and test_encoder(e, c)) for c in ENCODERS[e]} for e in ENCODERS}
     return {
         "ffmpeg": ffmpeg_ok, "ffmpeg_bin": FFMPEG, "encoders": enc,
-        "piper": shutil.which(PIPER) is not None,
+        "piper": _piper_available(),
         "piper_models": list_piper_models(voices_dir),
         "cpus": os.cpu_count() or 1, "auto_workers": auto_workers(),
     }
@@ -288,7 +315,87 @@ class RenderConfig:
     jpeg_quality: int = 90
 
 
-# ---------------------------------------------------------------- bước 1: TTS song song
+# ---------------------------------------------------------------- bước 1: TTS
+# Edge TTS: parallel OK. Piper: serialize + warm in-process model (see below).
+_piper_sem: Optional[asyncio.Semaphore] = None
+_piper_voice_lock = threading.Lock()
+_piper_voices: dict[str, object] = {}  # resolved model path -> PiperVoice
+
+
+def _get_piper_sem() -> asyncio.Semaphore:
+    global _piper_sem
+    if _piper_sem is None:
+        _piper_sem = asyncio.Semaphore(PIPER_CONCURRENCY)
+    return _piper_sem
+
+
+def _get_piper_voice(model: Path):
+    """Load PiperVoice once per model path; reuse for every scene in the process."""
+    key = str(model.resolve())
+    with _piper_voice_lock:
+        voice = _piper_voices.get(key)
+        if voice is not None:
+            return voice
+        from piper import PiperVoice
+        import onnxruntime as ort
+
+        # PiperVoice.load() builds a bare SessionOptions(); tighten threads first.
+        _orig = ort.SessionOptions
+
+        class _TunedSessionOptions(_orig):  # type: ignore[valid-type, misc]
+            def __init__(self, *a, **kw):
+                super().__init__(*a, **kw)
+                try:
+                    self.intra_op_num_threads = int(os.environ.get("PIPER_ORT_THREADS", "2"))
+                    self.inter_op_num_threads = 1
+                except Exception:
+                    pass
+
+        ort.SessionOptions = _TunedSessionOptions  # type: ignore[misc]
+        try:
+            voice = PiperVoice.load(key)
+        finally:
+            ort.SessionOptions = _orig  # type: ignore[misc]
+        _piper_voices[key] = voice
+        return voice
+
+
+def _run_piper_python(model: Path, text: str, raw: Path) -> None:
+    """Warm in-process synth — avoids reloading ~60MB ONNX every scene."""
+    voice = _get_piper_voice(model)
+    with wave.open(str(raw), "wb") as wf:
+        voice.synthesize_wav(text, wf)  # type: ignore[attr-defined]
+
+
+def _run_piper_native(model: Path, text: str, raw: Path) -> subprocess.CompletedProcess:
+    """One-shot native binary fallback. cwd = binary dir so $ORIGIN / .so resolve."""
+    piper_path = Path(PIPER)
+    cwd = str(piper_path.parent) if piper_path.is_file() else None
+    env = os.environ.copy()
+    if cwd:
+        env["LD_LIBRARY_PATH"] = cwd + ((":" + env["LD_LIBRARY_PATH"]) if env.get("LD_LIBRARY_PATH") else "")
+    return subprocess.run(
+        [str(piper_path), "-m", str(model), "-f", str(raw)],
+        input=text.encode("utf-8"),
+        capture_output=True,
+        cwd=cwd,
+        env=env,
+    )
+
+
+def _run_piper(model: Path, text: str, raw: Path) -> None:
+    """Prefer warm python piper-tts; fall back to native PIPER_BIN one-shot."""
+    if _piper_python_ok():
+        _run_piper_python(model, text, raw)
+        return
+    if not shutil.which(PIPER) and not Path(PIPER).is_file():
+        raise RuntimeError("Piper lỗi: không có piper-tts (Python) và không tìm thấy PIPER_BIN.")
+    r = _run_piper_native(model, text, raw)
+    if r.returncode != 0:
+        err = r.stderr.decode(errors="ignore")[-500:] if r.stderr else ""
+        raise RuntimeError(f"Piper native lỗi (rc={r.returncode}): {err}")
+
+
 async def _synth(cfg: RenderConfig, text: str, k: int, out_wav: Path):
     if cfg.tts == "edge":
         raw = cfg.work / f"raw{k:02d}.mp3"
@@ -302,11 +409,20 @@ async def _synth(cfg: RenderConfig, text: str, k: int, out_wav: Path):
                 await asyncio.sleep(2)
         af = "aresample=48000"
     else:
+        if cfg.piper_model is None:
+            raise RuntimeError("Piper lỗi: chưa chọn model (.onnx).")
         raw = cfg.work / f"raw{k:02d}.wav"
-        r = await asyncio.to_thread(subprocess.run, [PIPER, "-m", str(cfg.piper_model), "-f", str(raw)],
-                                    input=text.encode("utf-8"), capture_output=True)
-        if r.returncode != 0 or not raw.exists():
-            raise RuntimeError("Piper lỗi: " + r.stderr.decode(errors="ignore")[-500:])
+        # Serialize: ORT session is not safe for concurrent Run; multi-process
+        # native launches have hard-rebooted RK3588. Warm cache keeps serial fast.
+        async with _get_piper_sem():
+            try:
+                await asyncio.to_thread(_run_piper, cfg.piper_model, text, raw)
+            except Exception as e:
+                raise RuntimeError(f"Piper lỗi: {e}") from e
+        if not raw.exists() or raw.stat().st_size == 0:
+            raise RuntimeError(
+                f"Piper lỗi (size={raw.stat().st_size if raw.exists() else 0}): WAV rỗng"
+            )
         tempo = min(2.0, max(0.5, 1 + cfg.rate / 100))
         af = f"atempo={tempo:.3f},aresample=48000" if abs(tempo - 1) > 1e-3 else "aresample=48000"
     await asyncio.to_thread(run, [FFMPEG, "-y", "-i", str(raw), "-af", af, "-ac", "2", str(out_wav)])
@@ -328,7 +444,10 @@ async def _prepare(cfg: RenderConfig, progress, check):
         raise RuntimeError('Không tìm thấy phần tử class="scene" nào trong file HTML.')
 
     fps, maxlen = cfg.fps, (55 if cfg.aspect == "9:16" else 90)
-    sem, done = asyncio.Semaphore(4), [0]
+    # Edge: up to 4 network jobs. Piper: outer gather still OK, but _synth
+    # itself is gated by PIPER_CONCURRENCY (default 1).
+    tts_parallel = 1 if cfg.tts == "piper" else 4
+    sem, done = asyncio.Semaphore(tts_parallel), [0]
 
     async def one(k, s):
         async with sem:
