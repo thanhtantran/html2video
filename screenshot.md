@@ -10,7 +10,7 @@
 
 ![html2video-2](screenshots/html2video-2.png)
 
-## 3. Giao diện tối — hàng đợi / tiến độ
+## 3. Khi chạy render video không chạy full tải CPU
 
 ![html2video-3](screenshots/html2video-3.png)
 
