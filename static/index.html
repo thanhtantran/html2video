@@ -71,6 +71,14 @@ pre.err{white-space:pre-wrap;color:var(--err);font-size:12px;margin:6px 0 0}
 .out{padding:8px 0;border-bottom:1px solid var(--line);word-break:break-all}
 .out a{text-decoration:none;margin-right:8px}
 .hidden{display:none!important}
+.modal{position:fixed;inset:0;background:#0009;display:flex;align-items:center;justify-content:center;padding:20px;z-index:50}
+.modal .box{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;max-width:460px;width:100%;box-shadow:0 12px 40px #0007}
+.modal h3{margin:0 0 10px;font-size:16px;color:var(--acc)}
+.modal p{margin:0 0 10px}
+.modal code{background:var(--input);border:1px solid var(--line);padding:1px 5px;border-radius:5px;font-family:Consolas,monospace;font-size:12px}
+.modal .acts{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap}
+.modal button.sec{margin-top:0}
+.modal a.main{background:linear-gradient(90deg,var(--acc),var(--acc2));color:#fff;font-weight:700;padding:10px 18px;border-radius:10px;text-decoration:none;white-space:nowrap}
 .muted{color:var(--mut)}
 .warn{color:var(--warn)}
 @media(max-width:950px){main{grid-template-columns:1fr}}
@@ -224,6 +232,20 @@ pre.err{white-space:pre-wrap;color:var(--err);font-size:12px;margin:6px 0 0}
 <footer>
   2026 - Copyright by <a href="https://orangepi.vn" target="_blank" rel="noopener">Orange Pi Việt Nam</a>
 </footer>
+
+<div id="elModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="elModalTitle">
+  <div class="box">
+    <h3 id="elModalTitle">🎙️ ElevenLabs</h3>
+    <p>ElevenLabs yêu cầu <b>đăng ký tài khoản</b> và <b>mua gói</b> mới gọi được API.</p>
+    <p>Sau khi đăng ký, lấy API key tại <b>Profile → API Keys</b> rồi thêm vào <code>.env</code>:
+       <code>ELEVENLABS_API_KEY=...</code></p>
+    <p class="muted">Chưa có key? Chọn <b>Edge TTS</b> hoặc <b>Piper (offline)</b> để render ngay.</p>
+    <div class="acts">
+      <button type="button" class="sec" id="elModalClose">Đóng</button>
+      <a class="main" href="https://try.elevenlabs.io/mnetnw676a81" target="_blank" rel="noopener">Đăng ký ElevenLabs</a>
+    </div>
+  </div>
+</div>
 
 <script>
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
@@ -524,11 +546,18 @@ $("#cssPerf").onclick = () => { $("#css").value = ($("#css").value.trim() + "\n\
 $("#cssClear").onclick = () => { $("#css").value = ""; injectCss(); };
 
 /* ---------- Sự kiện chung ---------- */
+const elModal = $("#elModal");
+function openElModal() { elModal.classList.remove("hidden"); }
+function closeElModal() { elModal.classList.add("hidden"); }
+$("#elModalClose").onclick = closeElModal;
+elModal.addEventListener("click", e => { if (e.target === elModal) closeElModal(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeElModal(); });
+
 document.addEventListener("change", e => {
   const n = e.target.name, id = e.target.id;
   if (n === "aspect") { fitPreview(); updRes(); }
   if (n === "encoder") updateCodec();
-  if (n === "tts") updTts();
+  if (n === "tts") { updTts(); if (val("tts") === "elevenlabs") openElModal(); }
   if (id === "res") updRes();
   if (id === "vionly") fillVoices();
 });
