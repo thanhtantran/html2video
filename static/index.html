@@ -133,6 +133,7 @@ pre.err{white-space:pre-wrap;color:var(--err);font-size:12px;margin:6px 0 0}
             <input type="radio" name="tts" id="tts-edge" value="edge" checked><label for="tts-edge">☁️ Edge TTS</label>
             <input type="radio" name="tts" id="tts-piper" value="piper"><label for="tts-piper">💻 Piper (offline)</label>
             <input type="radio" name="tts" id="tts-eleven" value="elevenlabs"><label for="tts-eleven">🎙️ ElevenLabs</label>
+            <input type="radio" name="tts" id="tts-vieneu" value="vieneu"><label for="tts-vieneu">🇻🇳 VieNeu</label>
           </div>
         </div>
         <div id="box-edge">
@@ -147,6 +148,11 @@ pre.err{white-space:pre-wrap;color:var(--err);font-size:12px;margin:6px 0 0}
         <div id="box-eleven" class="hidden">
           <span class="t">Giọng ElevenLabs (tiếng Việt)</span>
           <select id="elvoice"></select>
+        </div>
+        <div id="box-vieneu" class="hidden">
+          <span class="t">Giọng VieNeu (presets)</span>
+          <select id="vnvoice"></select>
+          <div class="muted" style="font-size:12px;margin-top:6px">Máy chủ mẫu tự tạm dừng sau 30 phút — lần gọi đầu có thể chậm.</div>
         </div>
         <div>
           <span class="t">Tốc độ đọc: <b id="ratev">+5%</b></span>
@@ -302,12 +308,15 @@ async function loadCaps(refresh) {
   setDis("enc-cpu", !ok("cpu")); setDis("enc-nvidia", !ok("nvidia")); setDis("enc-rockchip", !ok("rockchip"));
   setDis("tts-piper", !caps.piper || !caps.piper_models.length);
   setDis("tts-eleven", !caps.elevenlabs);
+  setDis("tts-vieneu", !caps.vieneu);
   $("#pmodel").innerHTML = caps.piper_models.map(m => `<option>${esc(m)}</option>`).join("");
   $("#sys").innerHTML = `FFmpeg ${ic(caps.ffmpeg)} · CPU ${ic(ok("cpu"))} · NVIDIA ${ic(ok("nvidia"))}` +
     ` · Rockchip ${ic(ok("rockchip"))} · Piper ${ic(caps.piper && caps.piper_models.length)}` +
-    ` · ElevenLabs ${ic(caps.elevenlabs)}`;
+    ` · ElevenLabs ${ic(caps.elevenlabs)} · VieNeu ${ic(caps.vieneu)}`;
   $("#cpuinfo").textContent = `Máy có ${caps.cpus} lõi · Tự động = ${caps.auto_workers} luồng`;
-  await loadElevenVoices();
+  // Nạp danh sách giọng nền (không chặn UI: server cloud có thể đang "ngủ").
+  loadVoiceSelect("#elvoice", "/api/elevenlabs/voices", caps.elevenlabs && caps.elevenlabs_voice);
+  loadVoiceSelect("#vnvoice", "/api/vieneu/voices", caps.vieneu && caps.vieneu_voice);
   updateCodec(); updTts();
 }
 function updateCodec() {
@@ -321,6 +330,13 @@ function updTts() {
   $("#box-edge").classList.toggle("hidden", t !== "edge");
   $("#box-piper").classList.toggle("hidden", t !== "piper");
   $("#box-eleven").classList.toggle("hidden", t !== "elevenlabs");
+  $("#box-vieneu").classList.toggle("hidden", t !== "vieneu");
+}
+function ttsVoice() {
+  const t = val("tts");
+  if (t === "elevenlabs") return $("#elvoice").value.trim();
+  if (t === "vieneu") return $("#vnvoice").value.trim();
+  return $("#voice").value;
 }
 function updRes() {
   const [w, h] = ASPECT[val("aspect")], s = SCALE[$("#res").value];
@@ -329,17 +345,19 @@ function updRes() {
 
 /* ---------- Giọng Edge ---------- */
 async function loadVoices() { voices = await api("/api/voices"); fillVoices(); }
-async function loadElevenVoices() {
-  if (!caps || !caps.elevenlabs) return;
-  const sel = $("#elvoice"), def = (caps.elevenlabs_voice || "").trim();
-  const vs = await api("/api/elevenlabs/voices").catch(() => []);
+// Nạp danh sách giọng từ API vào <select>; luôn giữ option mặc định (từ .env).
+async function loadVoiceSelect(selId, url, defId) {
+  if (!defId) return;
+  const sel = $(selId), def = defId.trim();
+  sel.innerHTML = `<option value="${esc(def)}">${esc(def)} (mặc định)</option>`;
+  sel.value = def;
+  const vs = await api(url).catch(() => []);
+  if (!vs.length) return;
   sel.innerHTML = vs.map(v => `<option value="${esc(v.id)}">${esc(v.name)}</option>`).join("");
-  // Voice mặc định trong .env: thêm vào đầu danh sách nếu chưa có, rồi chọn nó.
-  if (def && !vs.some(v => v.id === def)) {
-    sel.insertAdjacentHTML("afterbegin",
-      `<option value="${esc(def)}">${esc(def)} (mặc định)</option>`);
+  if (!vs.some(v => v.id === def)) {
+    sel.insertAdjacentHTML("afterbegin", `<option value="${esc(def)}">${esc(def)} (mặc định)</option>`);
   }
-  if (def) sel.value = def;
+  sel.value = def;
 }
 function fillVoices() {
   const vi = $("#vionly").checked, keep = $("#voice").value;
@@ -438,7 +456,7 @@ $("#go").onclick = async () => {
   if (!cur) return;
   const o = {
     project: cur.id, tts: val("tts"), piper_model: $("#pmodel").value,
-    voice: val("tts") === "elevenlabs" ? $("#elvoice").value.trim() : $("#voice").value,
+    voice: ttsVoice(),
     rate: +$("#rate").value, aspect: val("aspect"), resolution: $("#res").value, fps: +$("#fps").value,
     subtitles: $("#subs").checked, encoder: val("encoder"), codec: val("codec"), extra_css: $("#css").value,
     workers: +$("#workers").value, upscale: $("#upscale").checked, chromium_gpu: $("#cgpu").checked,

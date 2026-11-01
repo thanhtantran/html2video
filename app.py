@@ -140,6 +140,11 @@ def api_elevenlabs_voices():
     return jsonify(R.elevenlabs_voices())
 
 
+@app.get("/api/vieneu/voices")
+def api_vieneu_voices():
+    return jsonify(R.vieneu_voices())
+
+
 @app.get("/api/projects")
 def api_projects():
     items = [json.loads(f.read_text(encoding="utf-8")) for f in UPLOADS.glob("*/project.json")]
@@ -248,6 +253,13 @@ def api_render():
         if not re.fullmatch(r"[\w\-]+", voice):
             return jsonify(error="Voice ID ElevenLabs không hợp lệ"), 400
         tts_label = f"ElevenLabs · {voice}"
+    elif tts == "vieneu":
+        if not caps["vieneu"]:
+            return jsonify(error="VieNeu chưa cấu hình (thiếu VIENEU_API_KEY trong .env)"), 400
+        voice = (o.get("voice") or "").strip() or R.VIENEU_VOICE
+        if not voice or len(voice) > 64:
+            return jsonify(error="Tên giọng VieNeu không hợp lệ"), 400
+        tts_label = f"VieNeu · {voice}"
     else:
         return jsonify(error="TTS không hợp lệ"), 400
 

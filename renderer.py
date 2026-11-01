@@ -58,6 +58,16 @@ try:
     ELEVENLABS_CONCURRENCY = max(1, int(os.environ.get("ELEVENLABS_CONCURRENCY", "1")))
 except ValueError:
     ELEVENLABS_CONCURRENCY = 1
+# VieNeu-TTS (self-hosted / instabox, OpenAI-compatible /v1/audio/speech).
+VIENEU_API_KEY = os.environ.get("VIENEU_API_KEY", "").strip()
+VIENEU_BASE_URL = os.environ.get(
+    "VIENEU_BASE_URL", "https://8000-agqylqh2x3lox43r5k3esopore.instabox.tech").rstrip("/")
+VIENEU_MODEL = os.environ.get("VIENEU_MODEL", "vieneu-v3-nano").strip()
+VIENEU_VOICE = os.environ.get("VIENEU_VOICE", "Mai Anh").strip()
+try:
+    VIENEU_CONCURRENCY = max(1, int(os.environ.get("VIENEU_CONCURRENCY", "1")))
+except ValueError:
+    VIENEU_CONCURRENCY = 1
 # Cap ORT/OpenMP threads before onnxruntime starts — reduces thrash on RK3588.
 os.environ.setdefault("OMP_NUM_THREADS", os.environ.get("PIPER_OMP_THREADS", "2"))
 os.environ.setdefault("MKL_NUM_THREADS", os.environ.get("PIPER_OMP_THREADS", "2"))
@@ -168,6 +178,9 @@ def detect_capabilities(voices_dir: Path) -> dict:
         "elevenlabs": bool(ELEVENLABS_API_KEY),
         "elevenlabs_voice": ELEVENLABS_VOICE_ID,
         "elevenlabs_model": ELEVENLABS_MODEL_ID,
+        "vieneu": bool(VIENEU_API_KEY and VIENEU_BASE_URL),
+        "vieneu_voice": VIENEU_VOICE,
+        "vieneu_model": VIENEU_MODEL,
         "cpus": os.cpu_count() or 1, "auto_workers": auto_workers(),
     }
 
@@ -226,6 +239,44 @@ def elevenlabs_voices():
     vi = [{"id": v["id"], "name": v["name"]} for v in parsed if v["vi"]]
     _el_voice_cache = vi or [{"id": v["id"], "name": v["name"]} for v in parsed]
     return _el_voice_cache
+
+
+def _parse_voice_list(data):
+    """Chuẩn hoá nhiều dạng response voice list -> [{id, name}]."""
+    items = data
+    if isinstance(data, dict):
+        items = next((data[k] for k in ("voices", "presets", "data", "items", "results")
+                      if isinstance(data.get(k), list)), [])
+    out = []
+    for it in items if isinstance(items, list) else []:
+        if isinstance(it, str):
+            out.append({"id": it, "name": it})
+        elif isinstance(it, dict):
+            vid = it.get("voice") or it.get("id") or it.get("voice_id") or it.get("name")
+            if vid:
+                out.append({"id": str(vid), "name": str(it.get("name") or it.get("display_name") or vid)})
+    return out
+
+
+_vn_voice_cache = None
+
+
+def vieneu_voices():
+    """Danh sách giọng có sẵn của VieNeu (/v1/voices/presets). Lỗi -> []."""
+    global _vn_voice_cache
+    if _vn_voice_cache is not None:
+        return _vn_voice_cache
+    if not VIENEU_API_KEY:
+        return []
+    req = urllib.request.Request(f"{VIENEU_BASE_URL}/v1/voices/presets",
+                                 headers={"Authorization": f"Bearer {VIENEU_API_KEY}"})
+    try:
+        with urllib.request.urlopen(req, timeout=45) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except Exception:
+        return []
+    _vn_voice_cache = _parse_voice_list(data)
+    return _vn_voice_cache
 
 
 # ---------------------------------------------------------------- tham số encoder
@@ -491,6 +542,37 @@ def _run_elevenlabs(voice_id: str, text: str, raw: Path) -> None:
     raw.write_bytes(data)
 
 
+def _run_vieneu(voice: str, text: str, raw: Path) -> None:
+    """One-shot VieNeu-TTS (OpenAI-compatible /v1/audio/speech → WAV 24 kHz)."""
+    if not VIENEU_API_KEY:
+        raise RuntimeError("thiếu VIENEU_API_KEY trong .env")
+    url = f"{VIENEU_BASE_URL}/v1/audio/speech"
+    body = json.dumps({
+        "model": VIENEU_MODEL,
+        "voice": voice,
+        "input": text,
+        "response_format": "wav",
+        "sample_rate": 24000,
+    }, ensure_ascii=False).encode("utf-8")
+    req = urllib.request.Request(url, data=body, method="POST", headers={
+        "Authorization": f"Bearer {VIENEU_API_KEY}",
+        "Content-Type": "application/json",
+        "Accept": "audio/wav",
+    })
+    try:
+        # Timeout rộng: box free tự ngủ sau 30 phút, request đầu phải chờ đánh thức.
+        with urllib.request.urlopen(req, timeout=300) as resp:
+            data = resp.read()
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode("utf-8", "ignore")[:400]
+        raise RuntimeError(f"HTTP {e.code}: {detail}") from e
+    except urllib.error.URLError as e:
+        raise RuntimeError(f"kết nối thất bại: {e.reason}") from e
+    if not data:
+        raise RuntimeError("không nhận được audio (kiểm tra voice / máy chủ đã bật?)")
+    raw.write_bytes(data)
+
+
 async def _synth(cfg: RenderConfig, text: str, k: int, out_wav: Path):
     if cfg.tts == "edge":
         raw = cfg.work / f"raw{k:02d}.mp3"
@@ -514,6 +596,17 @@ async def _synth(cfg: RenderConfig, text: str, k: int, out_wav: Path):
             raise RuntimeError(f"ElevenLabs lỗi (voice={voice_id}): {e}") from e
         if not raw.exists() or raw.stat().st_size == 0:
             raise RuntimeError(f"ElevenLabs lỗi: file audio rỗng (voice={voice_id})")
+        tempo = min(2.0, max(0.5, 1 + cfg.rate / 100))
+        af = f"atempo={tempo:.3f},aresample=48000" if abs(tempo - 1) > 1e-3 else "aresample=48000"
+    elif cfg.tts == "vieneu":
+        raw = cfg.work / f"raw{k:02d}.wav"
+        voice = (cfg.voice or VIENEU_VOICE).strip()
+        try:
+            await asyncio.to_thread(_run_vieneu, voice, text, raw)
+        except Exception as e:
+            raise RuntimeError(f"VieNeu lỗi (voice={voice}): {e}") from e
+        if not raw.exists() or raw.stat().st_size == 0:
+            raise RuntimeError(f"VieNeu lỗi: file audio rỗng (voice={voice})")
         tempo = min(2.0, max(0.5, 1 + cfg.rate / 100))
         af = f"atempo={tempo:.3f},aresample=48000" if abs(tempo - 1) > 1e-3 else "aresample=48000"
     else:
@@ -552,12 +645,14 @@ async def _prepare(cfg: RenderConfig, progress, check):
         raise RuntimeError('Không tìm thấy phần tử class="scene" nào trong file HTML.')
 
     fps, maxlen = cfg.fps, (55 if cfg.aspect == "9:16" else 90)
-    # Cloud TTS (Edge/ElevenLabs): low, staggered jobs to avoid throttling.
+    # Cloud TTS (Edge/ElevenLabs/VieNeu): low, staggered jobs to avoid throttling.
     # Piper: outer gather still OK, but _synth itself is gated by PIPER_CONCURRENCY.
     if cfg.tts == "piper":
         tts_parallel = PIPER_CONCURRENCY
     elif cfg.tts == "elevenlabs":
         tts_parallel = ELEVENLABS_CONCURRENCY
+    elif cfg.tts == "vieneu":
+        tts_parallel = VIENEU_CONCURRENCY
     else:
         tts_parallel = EDGE_CONCURRENCY
     sem, done = asyncio.Semaphore(tts_parallel), [0]

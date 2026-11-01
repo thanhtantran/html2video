@@ -29,7 +29,7 @@ Xem đủ ảnh: **[screenshot.md](screenshot.md)**
 - Upload `.html` / `.zip` (HTML + ảnh, font, CSS); mỗi dự án một thư mục; **xóa dự án** trên UI
 - Xem trước theo tỉ lệ khung hình; danh sách cảnh / lời thoại / thời lượng ước tính
 - Theme **sáng / tối**
-- **TTS:** Edge (online), **ElevenLabs** (online, cần API key) hoặc **Piper** offline (load model 1 lần trong process, synth tuần tự)
+- **TTS:** Edge (online), **ElevenLabs** / **VieNeu** (online, cần API key) hoặc **Piper** offline (load model 1 lần trong process, synth tuần tự)
 - Khung **16:9 / 9:16 / 4:3**, độ phân giải 720p–4K, FPS 24/25/30/60
 - Phụ đề trên video + luôn xuất `.srt`
 - Encoder: `libx264`/`libx265`, NVENC, `h264_rkmpp`/`hevc_rkmpp` — tự dò trên máy
@@ -42,7 +42,7 @@ Xem đủ ảnh: **[screenshot.md](screenshot.md)**
 ```
 Trình duyệt → Flask (app.py) → hàng đợi (1 job/lúc) → renderer.py
   ① Phân tích  Chromium đọc .scene[data-say][data-t]
-  ② TTS        Edge/ElevenLabs song song thấp + rải · Piper warm + tuần tự
+  ② TTS        Edge/ElevenLabs/VieNeu song song thấp + rải · Piper warm + tuần tự
   ③ Render     N worker Chromium · seek CSS animation · JPEG → ffmpeg → .ts
   ④ Ghép       concat (-c:v copy) + audio AAC → MP4 + SRT
 ```
@@ -156,6 +156,11 @@ Sửa `.env` (từ `.env.example`), rồi `sudo systemctl restart html2video`.
 | `ELEVENLABS_VOICE_ID` | `21m00Tcm4TlvDq8ikWAM` | Voice ID mặc định |
 | `ELEVENLABS_MODEL_ID` | `eleven_multilingual_v2` | Model (hỗ trợ tiếng Việt) |
 | `ELEVENLABS_CONCURRENCY` | `1` | Số request ElevenLabs song song (free tier giữ 1) |
+| `VIENEU_BASE_URL` | URL mẫu instabox | Base URL máy chủ VieNeu-TTS |
+| `VIENEU_API_KEY` | — | Bearer token VieNeu (bật tính năng VieNeu) |
+| `VIENEU_MODEL` | `vieneu-v3-nano` | Model VieNeu |
+| `VIENEU_VOICE` | `Mai Anh` | Giọng mặc định (preset) |
+| `VIENEU_CONCURRENCY` | `1` | Số request VieNeu song song |
 | `CHROMIUM_ARGS` / `CHROMIUM_GPU_ARGS` | — | Cờ Chromium |
 
 ---
