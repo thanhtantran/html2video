@@ -47,7 +47,7 @@ main{display:grid;grid-template-columns:340px 1fr;gap:18px;padding:18px 24px;max
 .seg input:checked+label{border-color:var(--acc);background:var(--seg-on);color:var(--txt)}
 .seg input:disabled+label{opacity:.35;cursor:not-allowed;text-decoration:line-through}
 .chk{display:flex;gap:6px;align-items:center;margin-top:6px;cursor:pointer}
-select,textarea{width:100%;background:var(--input);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:7px;font:inherit}
+select,textarea,input[type=text]{width:100%;background:var(--input);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:7px;font:inherit}
 textarea{font-family:Consolas,monospace;font-size:12px}
 input[type=range]{width:100%}
 button.main{background:linear-gradient(90deg,var(--acc),var(--acc2));border:none;color:#fff;font-weight:700;font-size:15px;padding:10px 22px;border-radius:10px;cursor:pointer}
@@ -124,6 +124,7 @@ pre.err{white-space:pre-wrap;color:var(--err);font-size:12px;margin:6px 0 0}
           <div class="seg">
             <input type="radio" name="tts" id="tts-edge" value="edge" checked><label for="tts-edge">☁️ Edge TTS</label>
             <input type="radio" name="tts" id="tts-piper" value="piper"><label for="tts-piper">💻 Piper (offline)</label>
+            <input type="radio" name="tts" id="tts-eleven" value="elevenlabs"><label for="tts-eleven">🎙️ ElevenLabs</label>
           </div>
         </div>
         <div id="box-edge">
@@ -134,6 +135,11 @@ pre.err{white-space:pre-wrap;color:var(--err);font-size:12px;margin:6px 0 0}
         <div id="box-piper" class="hidden">
           <span class="t">Model Piper (thư mục voices/)</span>
           <select id="pmodel"></select>
+        </div>
+        <div id="box-eleven" class="hidden">
+          <span class="t">Voice ID ElevenLabs</span>
+          <input type="text" id="elvoice" list="elvoices" placeholder="21m00Tcm4TlvDq8ikWAM">
+          <datalist id="elvoices"></datalist>
         </div>
         <div>
           <span class="t">Tốc độ đọc: <b id="ratev">+5%</b></span>
@@ -274,10 +280,14 @@ async function loadCaps(refresh) {
   const e = caps.encoders, ok = k => e[k].h264 || e[k].hevc, ic = b => b ? "✅" : "❌";
   setDis("enc-cpu", !ok("cpu")); setDis("enc-nvidia", !ok("nvidia")); setDis("enc-rockchip", !ok("rockchip"));
   setDis("tts-piper", !caps.piper || !caps.piper_models.length);
+  setDis("tts-eleven", !caps.elevenlabs);
   $("#pmodel").innerHTML = caps.piper_models.map(m => `<option>${esc(m)}</option>`).join("");
+  if (!$("#elvoice").value) $("#elvoice").value = caps.elevenlabs_voice || "";
   $("#sys").innerHTML = `FFmpeg ${ic(caps.ffmpeg)} · CPU ${ic(ok("cpu"))} · NVIDIA ${ic(ok("nvidia"))}` +
-    ` · Rockchip ${ic(ok("rockchip"))} · Piper ${ic(caps.piper && caps.piper_models.length)}`;
+    ` · Rockchip ${ic(ok("rockchip"))} · Piper ${ic(caps.piper && caps.piper_models.length)}` +
+    ` · ElevenLabs ${ic(caps.elevenlabs)}`;
   $("#cpuinfo").textContent = `Máy có ${caps.cpus} lõi · Tự động = ${caps.auto_workers} luồng`;
+  await loadElevenVoices();
   updateCodec(); updTts();
 }
 function updateCodec() {
@@ -287,9 +297,10 @@ function updateCodec() {
   if (!val("codec")) { const f = $$("input[name=codec]").find(x => !x.disabled); if (f) f.checked = true; }
 }
 function updTts() {
-  const p = val("tts") === "piper";
-  $("#box-edge").classList.toggle("hidden", p);
-  $("#box-piper").classList.toggle("hidden", !p);
+  const t = val("tts");
+  $("#box-edge").classList.toggle("hidden", t !== "edge");
+  $("#box-piper").classList.toggle("hidden", t !== "piper");
+  $("#box-eleven").classList.toggle("hidden", t !== "elevenlabs");
 }
 function updRes() {
   const [w, h] = ASPECT[val("aspect")], s = SCALE[$("#res").value];
@@ -298,6 +309,11 @@ function updRes() {
 
 /* ---------- Giọng Edge ---------- */
 async function loadVoices() { voices = await api("/api/voices"); fillVoices(); }
+async function loadElevenVoices() {
+  if (!caps || !caps.elevenlabs) return;
+  const vs = await api("/api/elevenlabs/voices").catch(() => []);
+  $("#elvoices").innerHTML = vs.map(v => `<option value="${esc(v.id)}">${esc(v.name)}</option>`).join("");
+}
 function fillVoices() {
   const vi = $("#vionly").checked, keep = $("#voice").value;
   const list = voices.filter(v => !vi || v.locale.startsWith("vi"));
@@ -394,7 +410,8 @@ async function upload(file) {
 $("#go").onclick = async () => {
   if (!cur) return;
   const o = {
-    project: cur.id, tts: val("tts"), voice: $("#voice").value, piper_model: $("#pmodel").value,
+    project: cur.id, tts: val("tts"), piper_model: $("#pmodel").value,
+    voice: val("tts") === "elevenlabs" ? $("#elvoice").value.trim() : $("#voice").value,
     rate: +$("#rate").value, aspect: val("aspect"), resolution: $("#res").value, fps: +$("#fps").value,
     subtitles: $("#subs").checked, encoder: val("encoder"), codec: val("codec"), extra_css: $("#css").value,
     workers: +$("#workers").value, upscale: $("#upscale").checked, chromium_gpu: $("#cgpu").checked,

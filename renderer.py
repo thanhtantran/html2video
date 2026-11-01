@@ -9,6 +9,7 @@ renderer.py (v2) – HTML + TTS → MP4, render song song nhiều tiến trình 
 import asyncio
 import base64
 import bisect
+import json
 import math
 import multiprocessing as mp
 import os
@@ -17,6 +18,8 @@ import shutil
 import subprocess
 import threading
 import time
+import urllib.error
+import urllib.request
 import wave
 from dataclasses import dataclass
 from pathlib import Path
@@ -46,6 +49,15 @@ try:
     EDGE_STAGGER = max(0.0, float(os.environ.get("EDGE_STAGGER", "0.4")))
 except ValueError:
     EDGE_STAGGER = 0.4
+# ElevenLabs (cloud REST, cần API key). Free tier giới hạn số request đồng thời.
+ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY", "").strip()
+ELEVENLABS_VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM").strip()
+ELEVENLABS_MODEL_ID = os.environ.get("ELEVENLABS_MODEL_ID", "eleven_multilingual_v2").strip()
+ELEVENLABS_BASE_URL = os.environ.get("ELEVENLABS_BASE_URL", "https://api.elevenlabs.io").rstrip("/")
+try:
+    ELEVENLABS_CONCURRENCY = max(1, int(os.environ.get("ELEVENLABS_CONCURRENCY", "1")))
+except ValueError:
+    ELEVENLABS_CONCURRENCY = 1
 # Cap ORT/OpenMP threads before onnxruntime starts — reduces thrash on RK3588.
 os.environ.setdefault("OMP_NUM_THREADS", os.environ.get("PIPER_OMP_THREADS", "2"))
 os.environ.setdefault("MKL_NUM_THREADS", os.environ.get("PIPER_OMP_THREADS", "2"))
@@ -153,6 +165,9 @@ def detect_capabilities(voices_dir: Path) -> dict:
         "ffmpeg": ffmpeg_ok, "ffmpeg_bin": FFMPEG, "encoders": enc,
         "piper": _piper_available(),
         "piper_models": list_piper_models(voices_dir),
+        "elevenlabs": bool(ELEVENLABS_API_KEY),
+        "elevenlabs_voice": ELEVENLABS_VOICE_ID,
+        "elevenlabs_model": ELEVENLABS_MODEL_ID,
         "cpus": os.cpu_count() or 1, "auto_workers": auto_workers(),
     }
 
@@ -171,6 +186,29 @@ def edge_voices():
         except Exception:
             return FALLBACK_VOICES
     return _voice_cache
+
+
+_el_voice_cache = None
+
+
+def elevenlabs_voices():
+    """Danh sách giọng ElevenLabs của tài khoản (id, name, labels). Lỗi -> []."""
+    global _el_voice_cache
+    if _el_voice_cache is not None:
+        return _el_voice_cache
+    if not ELEVENLABS_API_KEY:
+        return []
+    req = urllib.request.Request(f"{ELEVENLABS_BASE_URL}/v1/voices",
+                                 headers={"xi-api-key": ELEVENLABS_API_KEY})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        _el_voice_cache = [{"id": v["voice_id"], "name": v.get("name") or v["voice_id"],
+                            "labels": v.get("labels") or {}}
+                           for v in data.get("voices", [])]
+    except Exception:
+        return []
+    return _el_voice_cache
 
 
 # ---------------------------------------------------------------- tham số encoder
@@ -407,6 +445,35 @@ def _run_piper(model: Path, text: str, raw: Path) -> None:
         raise RuntimeError(f"Piper native lỗi (rc={r.returncode}): {err}")
 
 
+def _run_elevenlabs(voice_id: str, text: str, raw: Path) -> None:
+    """One-shot ElevenLabs TTS (blocking HTTP → gọi trong thread). Trả về MP3."""
+    if not ELEVENLABS_API_KEY:
+        raise RuntimeError("thiếu ELEVENLABS_API_KEY trong .env")
+    url = f"{ELEVENLABS_BASE_URL}/v1/text-to-speech/{voice_id}?output_format=mp3_44100_128"
+    body = json.dumps({
+        "text": text,
+        "model_id": ELEVENLABS_MODEL_ID,
+        "voice_settings": {"stability": 0.5, "similarity_boost": 0.75,
+                           "style": 0.0, "use_speaker_boost": True},
+    }, ensure_ascii=False).encode("utf-8")
+    req = urllib.request.Request(url, data=body, method="POST", headers={
+        "xi-api-key": ELEVENLABS_API_KEY,
+        "Content-Type": "application/json",
+        "Accept": "audio/mpeg",
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            data = resp.read()
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode("utf-8", "ignore")[:400]
+        raise RuntimeError(f"HTTP {e.code}: {detail}") from e
+    except urllib.error.URLError as e:
+        raise RuntimeError(f"kết nối thất bại: {e.reason}") from e
+    if not data:
+        raise RuntimeError("không nhận được audio (kiểm tra voice_id / hạn mức)")
+    raw.write_bytes(data)
+
+
 async def _synth(cfg: RenderConfig, text: str, k: int, out_wav: Path):
     if cfg.tts == "edge":
         raw = cfg.work / f"raw{k:02d}.mp3"
@@ -421,6 +488,17 @@ async def _synth(cfg: RenderConfig, text: str, k: int, out_wav: Path):
                     raise RuntimeError(f"Edge TTS lỗi (kiểm tra kết nối Internet): {e}")
                 await asyncio.sleep(2)
         af = "aresample=48000"
+    elif cfg.tts == "elevenlabs":
+        raw = cfg.work / f"raw{k:02d}.mp3"
+        voice_id = (cfg.voice or ELEVENLABS_VOICE_ID).strip()
+        try:
+            await asyncio.to_thread(_run_elevenlabs, voice_id, text, raw)
+        except Exception as e:
+            raise RuntimeError(f"ElevenLabs lỗi (voice={voice_id}): {e}") from e
+        if not raw.exists() or raw.stat().st_size == 0:
+            raise RuntimeError(f"ElevenLabs lỗi: file audio rỗng (voice={voice_id})")
+        tempo = min(2.0, max(0.5, 1 + cfg.rate / 100))
+        af = f"atempo={tempo:.3f},aresample=48000" if abs(tempo - 1) > 1e-3 else "aresample=48000"
     else:
         if cfg.piper_model is None:
             raise RuntimeError("Piper lỗi: chưa chọn model (.onnx).")
@@ -457,15 +535,20 @@ async def _prepare(cfg: RenderConfig, progress, check):
         raise RuntimeError('Không tìm thấy phần tử class="scene" nào trong file HTML.')
 
     fps, maxlen = cfg.fps, (55 if cfg.aspect == "9:16" else 90)
-    # Edge: low, staggered cloud jobs (see EDGE_CONCURRENCY). Piper: outer
-    # gather still OK, but _synth itself is gated by PIPER_CONCURRENCY (default 1).
-    tts_parallel = 1 if cfg.tts == "piper" else EDGE_CONCURRENCY
+    # Cloud TTS (Edge/ElevenLabs): low, staggered jobs to avoid throttling.
+    # Piper: outer gather still OK, but _synth itself is gated by PIPER_CONCURRENCY.
+    if cfg.tts == "piper":
+        tts_parallel = PIPER_CONCURRENCY
+    elif cfg.tts == "elevenlabs":
+        tts_parallel = ELEVENLABS_CONCURRENCY
+    else:
+        tts_parallel = EDGE_CONCURRENCY
     sem, done = asyncio.Semaphore(tts_parallel), [0]
 
     async def one(k, s):
         async with sem:
             check()
-            if cfg.tts == "edge" and EDGE_STAGGER > 0:
+            if cfg.tts in ("edge", "elevenlabs") and EDGE_STAGGER > 0:
                 await asyncio.sleep((k % tts_parallel) * EDGE_STAGGER)
             text = s["say"].strip()
             seg = cfg.work / f"aud{k:02d}.wav"

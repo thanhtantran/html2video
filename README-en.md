@@ -29,7 +29,7 @@ Full gallery: **[screenshot.md](screenshot.md)**
 - Upload `.html` / `.zip` (HTML + assets); one folder per project; **delete project** in the UI
 - Aspect-correct preview; scene list / dialogue / estimated duration
 - **Light / dark** theme toggle
-- **TTS:** Edge (online) or offline **Piper** (one warm in-process model, serial synth)
+- **TTS:** Edge (online), **ElevenLabs** (online, API key required) or offline **Piper** (one warm in-process model, serial synth)
 - Aspects **16:9 / 9:16 / 4:3**, 720p–4K, FPS 24/25/30/60
 - Burned-in captions + always export `.srt`
 - Encoders: `libx264`/`libx265`, NVENC, `h264_rkmpp`/`hevc_rkmpp` — auto-detected
@@ -42,7 +42,7 @@ Full gallery: **[screenshot.md](screenshot.md)**
 ```
 Browser → Flask (app.py) → queue (1 job at a time) → renderer.py
   ① Parse     Chromium reads .scene[data-say][data-t]
-  ② TTS       Edge ≤4 parallel · Piper warm + serial
+  ② TTS       Edge/ElevenLabs low-parallel + staggered · Piper warm + serial
   ③ Render    N Chromium workers · seek CSS animation · JPEG → ffmpeg → .ts
   ④ Mux       concat (-c:v copy) + AAC audio → MP4 + SRT
 ```
@@ -152,6 +152,10 @@ Edit `.env` (from `.env.example`), then `sudo systemctl restart html2video`.
 | `PIPER_ORT_THREADS` / `PIPER_OMP_THREADS` | `2` / `2` | ORT/OpenMP threads |
 | `EDGE_CONCURRENCY` | `2` | Parallel Edge TTS requests (keep low to avoid throttling) |
 | `EDGE_STAGGER` | `0.4` | Seconds to spread Edge requests (0 = off) |
+| `ELEVENLABS_API_KEY` | — | ElevenLabs API key (enables the ElevenLabs option) |
+| `ELEVENLABS_VOICE_ID` | `21m00Tcm4TlvDq8ikWAM` | Default voice ID |
+| `ELEVENLABS_MODEL_ID` | `eleven_multilingual_v2` | Model (supports Vietnamese) |
+| `ELEVENLABS_CONCURRENCY` | `1` | Parallel ElevenLabs requests (keep 1 on free tier) |
 | `CHROMIUM_ARGS` / `CHROMIUM_GPU_ARGS` | — | Chromium flags |
 
 ---

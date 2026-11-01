@@ -135,6 +135,11 @@ def api_voices():
     return jsonify(R.edge_voices())
 
 
+@app.get("/api/elevenlabs/voices")
+def api_elevenlabs_voices():
+    return jsonify(R.elevenlabs_voices())
+
+
 @app.get("/api/projects")
 def api_projects():
     items = [json.loads(f.read_text(encoding="utf-8")) for f in UPLOADS.glob("*/project.json")]
@@ -236,6 +241,13 @@ def api_render():
         if not caps["piper"] or pmodel not in caps["piper_models"]:
             return jsonify(error="Piper chưa cài hoặc model không có trong thư mục voices/"), 400
         tts_label = f"Piper · {pmodel}"
+    elif tts == "elevenlabs":
+        if not caps["elevenlabs"]:
+            return jsonify(error="ElevenLabs chưa cấu hình (thiếu ELEVENLABS_API_KEY trong .env)"), 400
+        voice = (o.get("voice") or "").strip() or R.ELEVENLABS_VOICE_ID
+        if not re.fullmatch(r"[\w\-]+", voice):
+            return jsonify(error="Voice ID ElevenLabs không hợp lệ"), 400
+        tts_label = f"ElevenLabs · {voice}"
     else:
         return jsonify(error="TTS không hợp lệ"), 400
 
