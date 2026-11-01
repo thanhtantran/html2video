@@ -47,7 +47,7 @@ main{display:grid;grid-template-columns:340px 1fr;gap:18px;padding:18px 24px;max
 .seg input:checked+label{border-color:var(--acc);background:var(--seg-on);color:var(--txt)}
 .seg input:disabled+label{opacity:.35;cursor:not-allowed;text-decoration:line-through}
 .chk{display:flex;gap:6px;align-items:center;margin-top:6px;cursor:pointer}
-select,textarea,input[type=text]{width:100%;background:var(--input);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:7px;font:inherit}
+select,textarea{width:100%;background:var(--input);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:7px;font:inherit}
 textarea{font-family:Consolas,monospace;font-size:12px}
 input[type=range]{width:100%}
 button.main{background:linear-gradient(90deg,var(--acc),var(--acc2));border:none;color:#fff;font-weight:700;font-size:15px;padding:10px 22px;border-radius:10px;cursor:pointer}
@@ -137,9 +137,8 @@ pre.err{white-space:pre-wrap;color:var(--err);font-size:12px;margin:6px 0 0}
           <select id="pmodel"></select>
         </div>
         <div id="box-eleven" class="hidden">
-          <span class="t">Voice ID ElevenLabs</span>
-          <input type="text" id="elvoice" list="elvoices" placeholder="21m00Tcm4TlvDq8ikWAM">
-          <datalist id="elvoices"></datalist>
+          <span class="t">Giọng ElevenLabs (tiếng Việt)</span>
+          <select id="elvoice"></select>
         </div>
         <div>
           <span class="t">Tốc độ đọc: <b id="ratev">+5%</b></span>
@@ -282,7 +281,6 @@ async function loadCaps(refresh) {
   setDis("tts-piper", !caps.piper || !caps.piper_models.length);
   setDis("tts-eleven", !caps.elevenlabs);
   $("#pmodel").innerHTML = caps.piper_models.map(m => `<option>${esc(m)}</option>`).join("");
-  if (!$("#elvoice").value) $("#elvoice").value = caps.elevenlabs_voice || "";
   $("#sys").innerHTML = `FFmpeg ${ic(caps.ffmpeg)} · CPU ${ic(ok("cpu"))} · NVIDIA ${ic(ok("nvidia"))}` +
     ` · Rockchip ${ic(ok("rockchip"))} · Piper ${ic(caps.piper && caps.piper_models.length)}` +
     ` · ElevenLabs ${ic(caps.elevenlabs)}`;
@@ -311,8 +309,15 @@ function updRes() {
 async function loadVoices() { voices = await api("/api/voices"); fillVoices(); }
 async function loadElevenVoices() {
   if (!caps || !caps.elevenlabs) return;
+  const sel = $("#elvoice"), def = (caps.elevenlabs_voice || "").trim();
   const vs = await api("/api/elevenlabs/voices").catch(() => []);
-  $("#elvoices").innerHTML = vs.map(v => `<option value="${esc(v.id)}">${esc(v.name)}</option>`).join("");
+  sel.innerHTML = vs.map(v => `<option value="${esc(v.id)}">${esc(v.name)}</option>`).join("");
+  // Voice mặc định trong .env: thêm vào đầu danh sách nếu chưa có, rồi chọn nó.
+  if (def && !vs.some(v => v.id === def)) {
+    sel.insertAdjacentHTML("afterbegin",
+      `<option value="${esc(def)}">${esc(def)} (mặc định)</option>`);
+  }
+  if (def) sel.value = def;
 }
 function fillVoices() {
   const vi = $("#vionly").checked, keep = $("#voice").value;

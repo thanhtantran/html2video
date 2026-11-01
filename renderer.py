@@ -189,10 +189,26 @@ def edge_voices():
 
 
 _el_voice_cache = None
+_VI_HINTS = ("vietnam", "viet", "việt")
+
+
+def _is_vietnamese_voice(v: dict) -> bool:
+    """Suy đoán giọng hỗ trợ tiếng Việt từ verified_languages / labels / tên."""
+    for lang in v.get("verified_languages") or []:
+        if str(lang.get("language", "")).strip().lower().startswith("vi"):
+            return True
+    parts = [str(x) for x in (v.get("labels") or {}).values()]
+    parts += [str(v.get("name") or ""), str(v.get("description") or "")]
+    blob = " ".join(parts).lower()
+    return any(h in blob for h in _VI_HINTS)
 
 
 def elevenlabs_voices():
-    """Danh sách giọng ElevenLabs của tài khoản (id, name, labels). Lỗi -> []."""
+    """Giọng ElevenLabs của tài khoản, lọc ra các giọng tiếng Việt.
+
+    Trả về [{id, name}]. Nếu không nhận diện được giọng tiếng Việt nào thì trả
+    toàn bộ danh sách để UI không bị rỗng. Lỗi mạng / chưa có key -> [].
+    """
     global _el_voice_cache
     if _el_voice_cache is not None:
         return _el_voice_cache
@@ -203,11 +219,12 @@ def elevenlabs_voices():
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
             data = json.loads(resp.read().decode("utf-8"))
-        _el_voice_cache = [{"id": v["voice_id"], "name": v.get("name") or v["voice_id"],
-                            "labels": v.get("labels") or {}}
-                           for v in data.get("voices", [])]
     except Exception:
         return []
+    parsed = [{"id": v["voice_id"], "name": v.get("name") or v["voice_id"],
+               "vi": _is_vietnamese_voice(v)} for v in data.get("voices", [])]
+    vi = [{"id": v["id"], "name": v["name"]} for v in parsed if v["vi"]]
+    _el_voice_cache = vi or [{"id": v["id"], "name": v["name"]} for v in parsed]
     return _el_voice_cache
 
 
