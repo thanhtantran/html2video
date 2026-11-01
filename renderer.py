@@ -35,6 +35,17 @@ try:
     PIPER_CONCURRENCY = max(1, int(os.environ.get("PIPER_CONCURRENCY", "1")))
 except ValueError:
     PIPER_CONCURRENCY = 1
+# Edge TTS is a cloud WebSocket. Many parallel calls get throttled by the
+# Microsoft endpoint and come back empty ("No audio was received"), so keep
+# concurrency low and stagger the starts a little.
+try:
+    EDGE_CONCURRENCY = max(1, int(os.environ.get("EDGE_CONCURRENCY", "2")))
+except ValueError:
+    EDGE_CONCURRENCY = 2
+try:
+    EDGE_STAGGER = max(0.0, float(os.environ.get("EDGE_STAGGER", "0.4")))
+except ValueError:
+    EDGE_STAGGER = 0.4
 # Cap ORT/OpenMP threads before onnxruntime starts — reduces thrash on RK3588.
 os.environ.setdefault("OMP_NUM_THREADS", os.environ.get("PIPER_OMP_THREADS", "2"))
 os.environ.setdefault("MKL_NUM_THREADS", os.environ.get("PIPER_OMP_THREADS", "2"))
@@ -399,9 +410,11 @@ def _run_piper(model: Path, text: str, raw: Path) -> None:
 async def _synth(cfg: RenderConfig, text: str, k: int, out_wav: Path):
     if cfg.tts == "edge":
         raw = cfg.work / f"raw{k:02d}.mp3"
+        # Edge rejects rates outside ±100%, which yields an empty session.
+        rate = max(-100, min(100, cfg.rate))
         for attempt in range(3):
             try:
-                await edge_tts.Communicate(text, cfg.voice, rate=f"{cfg.rate:+d}%").save(str(raw))
+                await edge_tts.Communicate(text, cfg.voice, rate=f"{rate:+d}%").save(str(raw))
                 break
             except Exception as e:
                 if attempt == 2:
@@ -444,14 +457,16 @@ async def _prepare(cfg: RenderConfig, progress, check):
         raise RuntimeError('Không tìm thấy phần tử class="scene" nào trong file HTML.')
 
     fps, maxlen = cfg.fps, (55 if cfg.aspect == "9:16" else 90)
-    # Edge: up to 4 network jobs. Piper: outer gather still OK, but _synth
-    # itself is gated by PIPER_CONCURRENCY (default 1).
-    tts_parallel = 1 if cfg.tts == "piper" else 4
+    # Edge: low, staggered cloud jobs (see EDGE_CONCURRENCY). Piper: outer
+    # gather still OK, but _synth itself is gated by PIPER_CONCURRENCY (default 1).
+    tts_parallel = 1 if cfg.tts == "piper" else EDGE_CONCURRENCY
     sem, done = asyncio.Semaphore(tts_parallel), [0]
 
     async def one(k, s):
         async with sem:
             check()
+            if cfg.tts == "edge" and EDGE_STAGGER > 0:
+                await asyncio.sleep((k % tts_parallel) * EDGE_STAGGER)
             text = s["say"].strip()
             seg = cfg.work / f"aud{k:02d}.wav"
             speech = 0.0

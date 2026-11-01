@@ -150,6 +150,8 @@ Edit `.env` (from `.env.example`), then `sudo systemctl restart html2video`.
 | `PIPER_BIN` | `piper` | Native fallback |
 | `PIPER_CONCURRENCY` | `1` | **Keep 1 on RK3588** — parallel ONNX often hard-reboots |
 | `PIPER_ORT_THREADS` / `PIPER_OMP_THREADS` | `2` / `2` | ORT/OpenMP threads |
+| `EDGE_CONCURRENCY` | `2` | Parallel Edge TTS requests (keep low to avoid throttling) |
+| `EDGE_STAGGER` | `0.4` | Seconds to spread Edge requests (0 = off) |
 | `CHROMIUM_ARGS` / `CHROMIUM_GPU_ARGS` | — | Chromium flags |
 
 ---

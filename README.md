@@ -150,6 +150,8 @@ Sửa `.env` (từ `.env.example`), rồi `sudo systemctl restart html2video`.
 | `PIPER_BIN` | `piper` | Fallback native |
 | `PIPER_CONCURRENCY` | `1` | **Giữ 1 trên RK3588** — song song dễ hard-reboot |
 | `PIPER_ORT_THREADS` / `PIPER_OMP_THREADS` | `2` / `2` | Thread ORT/OpenMP |
+| `EDGE_CONCURRENCY` | `2` | Số request Edge TTS song song (giữ thấp để tránh throttle) |
+| `EDGE_STAGGER` | `0.4` | Giây rải đều các request Edge (0 = tắt) |
 | `CHROMIUM_ARGS` / `CHROMIUM_GPU_ARGS` | — | Cờ Chromium |
 
 ---

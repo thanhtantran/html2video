@@ -1,5 +1,5 @@
 flask>=3.0
-edge-tts>=6.1
+edge-tts>=7.0
 playwright>=1.49
 # Tùy chọn – TTS offline:
 # piper-tts
