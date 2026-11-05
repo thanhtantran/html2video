@@ -62,6 +62,11 @@ table{width:100%;border-collapse:collapse;font-size:13px}
 td,th{padding:6px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
 th{color:var(--mut);font-weight:600}
 .scroll{max-height:260px;overflow:auto}
+#scenes input[type=number]{width:84px;background:var(--input);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:6px;font:inherit}
+#scenes textarea{min-height:32px;resize:vertical;font-family:inherit;font-size:13px}
+#scenes tr.changed td{background:var(--seg-on)}
+.scbar{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
+.scbar button{margin-top:0}
 .job{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:10px}
 .job .actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:4px}
 .st{font-size:12px;padding:2px 8px;border-radius:20px;background:var(--st-bg)}
@@ -122,6 +127,11 @@ pre.err{white-space:pre-wrap;color:var(--err);font-size:12px;margin:6px 0 0}
       <div class="pv" id="pv"><iframe id="frame"></iframe></div>
       <div id="pinfo" class="muted" style="margin:10px 0"></div>
       <div class="scroll"><table id="scenes"></table></div>
+      <div class="scbar hidden" id="scbar">
+        <button type="button" class="main" id="saveScenes" style="font-size:14px;padding:8px 18px">💾 Lưu lại</button>
+        <button type="button" class="sec" id="resetScenes">↩ Hủy</button>
+        <span id="scmsg" class="muted"></span>
+      </div>
     </div>
 
     <div class="card">
@@ -404,14 +414,69 @@ async function selectProject(id) {
   $("#empty").classList.add("hidden"); $("#proj").classList.remove("hidden");
   $("#ptitle").textContent = "📄 " + (a.title || a.name);
   $("#frame").src = `/preview/${a.id}/` + a.entry.split("/").map(encodeURIComponent).join("/");
-  $("#pinfo").innerHTML = a.scenes.length
-    ? `<b>${a.scenes.length}</b> cảnh · <b>${a.chars}</b> ký tự lời thoại · thời lượng ước tính <b>~${fmtT(a.est)}</b>`
-    : `<span class="warn">⚠ Không tìm thấy &lt;section class="scene" data-say="…"&gt; nào. File cần theo cấu trúc này để render.</span>`;
-  $("#scenes").innerHTML = "<tr><th>#</th><th>Tối thiểu</th><th>Lời thoại</th></tr>" + a.scenes.map((s, i) =>
-    `<tr><td>${i + 1}</td><td>${s.t}s</td><td>${s.say ? esc(s.say) : '<i class="muted">(không có lời)</i>'}</td></tr>`).join("");
-  $("#go").disabled = !a.scenes.length;
+  const hasS = a.scenes.length > 0;
+  if (!hasS) $("#pinfo").innerHTML = `<span class="warn">⚠ Không tìm thấy &lt;section class="scene" data-say="…"&gt; nào. File cần theo cấu trúc này để render.</span>`;
+  $("#scenes").innerHTML = hasS
+    ? "<tr><th>#</th><th>Tối thiểu (giây)</th><th>Lời thoại</th></tr>" + a.scenes.map((s, i) =>
+        `<tr class="srow"><td>${i + 1}</td>` +
+        `<td><input class="sct" type="number" min="0" max="3600" step="0.5" value="${s.t}"></td>` +
+        `<td><textarea class="scs" rows="1" placeholder="(không có lời)">${esc(s.say)}</textarea></td></tr>`).join("")
+    : "";
+  $("#scbar").classList.toggle("hidden", !hasS);
+  $("#scmsg").textContent = "";
+  if (hasS) updScenes();
+  $("#go").disabled = !hasS;
   fitPreview(); loadProjects();
 }
+
+/* ---------- Phân cảnh: chỉnh sửa & lưu ---------- */
+function sceneVals() {
+  return $$("#scenes tr.srow").map(tr => ({
+    t: parseFloat(tr.querySelector(".sct").value) || 0,
+    say: tr.querySelector(".scs").value.trim(),
+  }));
+}
+function scenesDirty() {
+  if (!cur) return false;
+  const v = sceneVals();
+  return v.length !== cur.scenes.length || v.some((s, i) =>
+    Math.abs(s.t - cur.scenes[i].t) > 1e-9 || s.say !== cur.scenes[i].say);
+}
+function updScenes() {
+  if (!cur || !$("#scenes").querySelector("tr.srow")) return;
+  const v = sceneVals();
+  const chars = v.reduce((n, s) => n + s.say.length, 0);
+  const est = v.reduce((n, s) => n + (s.say ? Math.max(s.t, 1.5 + s.say.length / 15) : s.t), 0);
+  $("#pinfo").innerHTML = `<b>${v.length}</b> cảnh · <b>${chars}</b> ký tự lời thoại · thời lượng ước tính <b>~${fmtT(est)}</b>`;
+  $$("#scenes tr.srow").forEach((tr, i) => tr.classList.toggle("changed",
+    Math.abs(v[i].t - cur.scenes[i].t) > 1e-9 || v[i].say !== cur.scenes[i].say));
+  const d = scenesDirty();
+  $("#saveScenes").disabled = !d;
+  $("#scmsg").textContent = d ? "Có thay đổi chưa lưu" : "";
+}
+$("#scenes").addEventListener("input", updScenes);
+$("#resetScenes").onclick = () => {
+  if (!cur) return;
+  if (scenesDirty() && !confirm("Hủy các chỉnh sửa chưa lưu?")) return;
+  selectProject(cur.id);
+};
+$("#saveScenes").onclick = async () => {
+  if (!cur) return;
+  $("#saveScenes").disabled = true;
+  $("#scmsg").textContent = "Đang lưu…";
+  try {
+    await api(`/api/projects/${encodeURIComponent(cur.id)}/scenes`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({scenes: sceneVals()}),
+    });
+    await selectProject(cur.id);
+    $("#scmsg").textContent = "✅ Đã lưu chỉnh sửa vào file HTML";
+  } catch (e) {
+    $("#scmsg").textContent = "❌ " + e.message;
+    $("#saveScenes").disabled = false;
+  }
+};
 
 /* ---------- Xem trước ---------- */
 function fitPreview() {

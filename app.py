@@ -63,6 +63,56 @@ def load_meta(pid):
     return json.loads(f.read_text(encoding="utf-8")) if f.exists() else None
 
 
+# ------------------------------------------------------------ sửa phân cảnh
+# Ghi lại data-t / data-say của từng thẻ có class "scene" (theo thứ tự DOM).
+_OPEN_TAG = re.compile(r"<([a-zA-Z][\w:-]*)((?:\"[^\"]*\"|'[^']*'|[^>\"'])*)(/?)\s*>")
+_CLASS_ATTR = re.compile(r"\bclass\s*=\s*(?:\"([^\"]*)\"|'([^']*)'|([^\s>]+))", re.I)
+
+
+def _has_scene_class(attrs):
+    m = _CLASS_ATTR.search(attrs)
+    return bool(m) and "scene" in (m.group(1) or m.group(2) or m.group(3) or "").split()
+
+
+def _set_attr(attrs, name, value):
+    """Đặt/thay một thuộc tính trong chuỗi attrs của thẻ mở (value đã escape)."""
+    pat = re.compile(r"\b" + name + r"\s*=\s*(?:\"[^\"]*\"|'[^']*'|[^\s>]+)", re.I)
+    quoted = f'{name}="{value}"'
+    if pat.search(attrs):
+        return pat.sub(lambda _m: quoted, attrs, count=1)
+    return attrs + " " + quoted
+
+
+def _esc_attr(s):
+    return (s.replace("&", "&amp;").replace('"', "&quot;")
+            .replace("<", "&lt;").replace(">", "&gt;"))
+
+
+def rewrite_scenes(html, scenes):
+    """Trả về (html_mới, số_cảnh). Lỗi nếu số cảnh không khớp hoặc thời lượng sai."""
+    out, pos, idx = [], 0, 0
+    for m in _OPEN_TAG.finditer(html):
+        attrs = m.group(2)
+        if not _has_scene_class(attrs):
+            continue
+        if idx >= len(scenes):
+            raise ValueError("File HTML có nhiều phân cảnh hơn dữ liệu gửi lên")
+        item = scenes[idx]
+        try:
+            t = max(0.0, min(3600.0, float(item.get("t"))))
+        except (TypeError, ValueError):
+            raise ValueError(f"Thời lượng cảnh #{idx + 1} không hợp lệ")
+        new_attrs = _set_attr(attrs, "data-t", f"{t:g}")
+        new_attrs = _set_attr(new_attrs, "data-say", _esc_attr(str(item.get("say") or "")))
+        out.append(html[pos:m.start()])
+        out.append(f"<{m.group(1)}{new_attrs}{m.group(3)}>")
+        pos, idx = m.end(), idx + 1
+    if idx != len(scenes):
+        raise ValueError(f"Số phân cảnh không khớp: HTML có {idx}, dữ liệu gửi lên có {len(scenes)}")
+    out.append(html[pos:])
+    return "".join(out), idx
+
+
 # ------------------------------------------------------------ năng lực hệ thống
 _caps, _caps_lock = {"data": None}, threading.Lock()
 
@@ -196,6 +246,30 @@ def api_project(pid):
     chars = sum(len(s["say"]) for s in sp.scenes)
     est = sum(max(s["t"], 1.5 + len(s["say"]) / 15) if s["say"] else s["t"] for s in sp.scenes)
     return jsonify({**meta, "title": sp.title.strip(), "scenes": sp.scenes, "chars": chars, "est": est})
+
+
+@app.post("/api/projects/<pid>/scenes")
+def api_save_scenes(pid):
+    """Ghi đè data-t / data-say vào file HTML của dự án (theo bảng phân cảnh đã sửa)."""
+    meta = load_meta(pid)
+    if not meta:
+        abort(404)
+    data = request.get_json(force=True, silent=True) or {}
+    scenes = data.get("scenes")
+    if not isinstance(scenes, list) or not scenes:
+        return jsonify(error="Danh sách phân cảnh không hợp lệ"), 400
+    f = UPLOADS / pid / meta["entry"]
+    if not f.exists():
+        return jsonify(error="Không tìm thấy file HTML của dự án"), 404
+    try:
+        with open(f, "r", encoding="utf-8", newline="") as fh:
+            html = fh.read()
+        new_html, n = rewrite_scenes(html, scenes)
+        with open(f, "w", encoding="utf-8", newline="") as fh:
+            fh.write(new_html)
+    except (ValueError, OSError) as e:
+        return jsonify(error=str(e)), 400
+    return jsonify(ok=True, scenes=n)
 
 
 @app.delete("/api/projects/<pid>")
