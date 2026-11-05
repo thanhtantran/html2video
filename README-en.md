@@ -167,20 +167,53 @@ Edit `.env` (from `.env.example`), then `sudo systemctl restart html2video`.
 
 ## 7. Usage
 
+### 7.1 Web UI
+
 1. Upload / select a project (**Delete** removes `uploads/<id>/`)
-2. Choose TTS, aspect, resolution, encoder…
+2. Choose TTS (**Edge · Piper · ElevenLabs · VieNeu**), voice, rate, aspect, resolution, encoder…
 3. **Render MP4** → watch the **queue** (Cancel / Delete job / download MP4·SRT)
 4. Toggle light/dark theme in the header
 
-Main API: `GET /api/capabilities`, `POST /api/upload`, `POST /api/render`, `GET /api/jobs`, `POST /api/jobs/<id>/cancel`, `DELETE /api/jobs/<id>`, `DELETE /api/projects/<id>`, `GET|DELETE /api/outputs…`
+### 7.2 Via API
+
+Everything the UI does is available over REST: upload & select a project, read the scene list and
+estimated duration, render with every option (TTS + new voices, rate, aspect, resolution, encoder…),
+track the queue, and **get the MP4/SRT download link**.
+
+➡️ **Full docs: [API-en.md](API-en.md)** — parameter tables, error codes, end-to-end Bash and Python examples.
+
+Minimal flow:
 
 ```bash
-curl -F file=@examples/demo.html http://localhost:5000/api/upload
-curl -X POST http://localhost:5000/api/render -H 'Content-Type: application/json' -d '{
-  "project":"demo-YYYYMMDD-HHMMSS","tts":"edge","voice":"vi-VN-HoaiMyNeural","rate":5,
-  "aspect":"16:9","resolution":"1080p","fps":30,"subtitles":true,
-  "encoder":"rockchip","codec":"h264","workers":0}'
+BASE=http://localhost:5000
+
+# 1) Upload → project id
+PID=$(curl -s -F file=@examples/demo.html "$BASE/api/upload" | jq -r .id)
+
+# 2) Render → job id
+JID=$(curl -s -X POST "$BASE/api/render" -H 'Content-Type: application/json' -d "{
+  \"project\": \"$PID\", \"tts\": \"vieneu\", \"voice\": \"Mai Anh\", \"rate\": 5,
+  \"aspect\": \"9:16\", \"resolution\": \"1080p\", \"fps\": 30,
+  \"subtitles\": true, \"encoder\": \"rockchip\", \"codec\": \"h264\", \"workers\": 0
+}" | jq -r .id)
+
+# 3) Wait until status = "done"
+curl -s "$BASE/api/jobs" | jq ".[] | select(.id==\"$JID\") | {status,progress,message}"
+
+# 4) Download the MP4 (the .srt shares the same name)
+OUT=$(curl -s "$BASE/api/jobs" | jq -r ".[] | select(.id==\"$JID\") | .output")
+curl -s -o "$OUT" "$BASE/outputs/$OUT?dl=1"
 ```
+
+Main route groups:
+
+| Group | Routes |
+|---|---|
+| Capabilities & voices | `GET /api/capabilities` · `/api/voices` · `/api/elevenlabs/voices` · `/api/vieneu/voices` |
+| Projects | `POST /api/upload` · `GET /api/projects` · `GET /api/projects/<pid>` · `DELETE /api/projects/<pid>` |
+| Render | `POST /api/render` |
+| Queue | `GET /api/jobs` · `POST /api/jobs/<id>/cancel` · `DELETE /api/jobs/<id>` |
+| Results | `GET /api/outputs` · `GET /outputs/<name>?dl=1` · `DELETE /api/outputs/<name>` |
 
 ---
 

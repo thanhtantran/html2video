@@ -167,20 +167,53 @@ Sửa `.env` (từ `.env.example`), rồi `sudo systemctl restart html2video`.
 
 ## 7. Sử dụng
 
+### 7.1 Trên giao diện web
+
 1. Upload / chọn dự án (có nút **Xóa** → xóa `uploads/<id>/`)
-2. Chọn TTS, khung hình, độ phân giải, encoder…
+2. Chọn TTS (**Edge · Piper · ElevenLabs · VieNeu**), giọng đọc, tốc độ đọc, khung hình, độ phân giải, encoder…
 3. **Render MP4** → theo dõi **Hàng đợi** (Hủy / Xóa job / tải MP4·SRT)
 4. Đổi theme sáng/tối trên header
 
-API chính: `GET /api/capabilities`, `POST /api/upload`, `POST /api/render`, `GET /api/jobs`, `POST /api/jobs/<id>/cancel`, `DELETE /api/jobs/<id>`, `DELETE /api/projects/<id>`, `GET|DELETE /api/outputs…`
+### 7.2 Qua API
+
+Mọi thao tác trên UI đều gọi được bằng REST: upload & chọn dự án, xem danh sách cảnh và thời lượng
+ước tính, render với đầy đủ tùy chọn (TTS + giọng mới, tốc độ đọc, khung hình, độ phân giải, encoder…),
+theo dõi hàng đợi, và **lấy link tải MP4/SRT** về máy.
+
+➡️ **Tài liệu đầy đủ: [API.md](API.md)** — bảng tham số, mã lỗi, ví dụ end-to-end bằng Bash và Python.
+
+Luồng tối thiểu:
 
 ```bash
-curl -F file=@examples/demo.html http://localhost:5000/api/upload
-curl -X POST http://localhost:5000/api/render -H 'Content-Type: application/json' -d '{
-  "project":"demo-YYYYMMDD-HHMMSS","tts":"edge","voice":"vi-VN-HoaiMyNeural","rate":5,
-  "aspect":"16:9","resolution":"1080p","fps":30,"subtitles":true,
-  "encoder":"rockchip","codec":"h264","workers":0}'
+BASE=http://localhost:5000
+
+# 1) Upload → project id
+PID=$(curl -s -F file=@examples/demo.html "$BASE/api/upload" | jq -r .id)
+
+# 2) Render → job id
+JID=$(curl -s -X POST "$BASE/api/render" -H 'Content-Type: application/json' -d "{
+  \"project\": \"$PID\", \"tts\": \"vieneu\", \"voice\": \"Mai Anh\", \"rate\": 5,
+  \"aspect\": \"9:16\", \"resolution\": \"1080p\", \"fps\": 30,
+  \"subtitles\": true, \"encoder\": \"rockchip\", \"codec\": \"h264\", \"workers\": 0
+}" | jq -r .id)
+
+# 3) Chờ tới khi status = "done"
+curl -s "$BASE/api/jobs" | jq ".[] | select(.id==\"$JID\") | {status,progress,message}"
+
+# 4) Tải MP4 (+ .srt cùng tên) về máy
+OUT=$(curl -s "$BASE/api/jobs" | jq -r ".[] | select(.id==\"$JID\") | .output")
+curl -s -o "$OUT" "$BASE/outputs/$OUT?dl=1"
 ```
+
+Nhóm route chính:
+
+| Nhóm | Route |
+|---|---|
+| Năng lực & giọng | `GET /api/capabilities` · `/api/voices` · `/api/elevenlabs/voices` · `/api/vieneu/voices` |
+| Dự án | `POST /api/upload` · `GET /api/projects` · `GET /api/projects/<pid>` · `DELETE /api/projects/<pid>` |
+| Render | `POST /api/render` |
+| Hàng đợi | `GET /api/jobs` · `POST /api/jobs/<id>/cancel` · `DELETE /api/jobs/<id>` |
+| Kết quả | `GET /api/outputs` · `GET /outputs/<name>?dl=1` · `DELETE /api/outputs/<name>` |
 
 ---
 
