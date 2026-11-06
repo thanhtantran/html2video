@@ -62,8 +62,11 @@ table{width:100%;border-collapse:collapse;font-size:13px}
 td,th{padding:6px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
 th{color:var(--mut);font-weight:600}
 .scroll{max-height:260px;overflow:auto}
-#scenes input[type=number]{width:84px;background:var(--input);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:6px;font:inherit}
-#scenes textarea{min-height:32px;resize:vertical;font-family:inherit;font-size:13px}
+#scenes{table-layout:fixed}
+#scenes th:nth-child(1),#scenes td:nth-child(1){width:40px}
+#scenes th:nth-child(2),#scenes td:nth-child(2){width:110px}
+#scenes input[type=number]{width:100%;background:var(--input);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:6px;font:inherit}
+#scenes textarea{width:100%;min-height:32px;resize:vertical;font-family:inherit;font-size:13px}
 #scenes tr.changed td{background:var(--seg-on)}
 .scbar{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
 .scbar button{margin-top:0}
@@ -269,7 +272,7 @@ const val = n => (document.querySelector(`input[name=${n}]:checked`) || {}).valu
 const ASPECT = {"16:9": [1280, 720], "9:16": [720, 1280], "4:3": [960, 720]};
 const SCALE = {"720p": 1, "1080p": 1.5, "1440p": 2, "2160p": 3};
 const ST = {queued: "Đang chờ", running: "Đang render", done: "Hoàn tất", error: "Lỗi", cancelled: "Đã hủy"};
-let caps = null, cur = null, voices = [], lastDone = -1;
+let caps = null, cur = null, voices = [], lastDone = -1, aspectPid = null;
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const fmtT = s => { s = Math.round(s); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
@@ -352,6 +355,14 @@ function updRes() {
   const [w, h] = ASPECT[val("aspect")], s = SCALE[$("#res").value];
   $("#resinfo").textContent = `→ ${w * s}×${h * s}`;
 }
+// Suy ra khung hình từ tên file HTML (9x16 / 16x9 / 4x3), mặc định 16:9.
+function aspectFromName(a) {
+  const n = ((a && (a.name + " " + a.entry)) || "").toLowerCase();
+  if (n.includes("9x16")) return "9:16";
+  if (n.includes("16x9")) return "16:9";
+  if (n.includes("4x3")) return "4:3";
+  return "16:9";
+}
 
 /* ---------- Giọng Edge ---------- */
 async function loadVoices() { voices = await api("/api/voices"); fillVoices(); }
@@ -411,6 +422,11 @@ $("#plist").onclick = async e => {
 async function selectProject(id) {
   const a = await api(`/api/projects/${id}`);
   cur = a;
+  if (aspectPid !== a.id) {          // chỉ tự chọn khung hình khi đổi dự án
+    aspectPid = a.id;
+    const el = $$("input[name=aspect]").find(x => x.value === aspectFromName(a));
+    if (el && !el.checked) { el.checked = true; updRes(); }
+  }
   $("#empty").classList.add("hidden"); $("#proj").classList.remove("hidden");
   $("#ptitle").textContent = "📄 " + (a.title || a.name);
   $("#frame").src = `/preview/${a.id}/` + a.entry.split("/").map(encodeURIComponent).join("/");
